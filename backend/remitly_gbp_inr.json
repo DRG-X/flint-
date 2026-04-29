@@ -1,0 +1,10 @@
+[
+  {
+    "error_key": "NOT_ALLOWED",
+    "message": "We're sorry, we encountered an error processing your request. Please try again in a couple of minutes.",
+    "text_markdown": null,
+    "severity": "ERROR",
+    "lang": "und",
+    "keypaths": []
+  }
+]

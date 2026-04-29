@@ -1,0 +1,50 @@
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Float, Text, ForeignKey
+from datetime import datetime
+from database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    clerk_user_id   = Column(String, unique=True, index=True, nullable=False)  # Clerk's user_id
+    email           = Column(String, index=True, nullable=True)
+    full_name       = Column(String, nullable=True)
+    country         = Column(String, nullable=True)    # ISO 2-letter, e.g. "IN"
+    university      = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=True)
+    home_currency   = Column(String, nullable=True)    # e.g. "INR"
+    corridor_from   = Column(String, nullable=True)    # e.g. "GBP"
+    corridor_to     = Column(String, nullable=True)    # e.g. "INR"
+    is_onboarded    = Column(Boolean, default=False)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Comparison(Base):
+    __tablename__ = "comparisons"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String, ForeignKey("users.clerk_user_id", ondelete="CASCADE"), nullable=True)
+    amount        = Column(Float, nullable=False)
+    from_currency = Column(String, nullable=False)
+    to_currency   = Column(String, nullable=False)
+    results_json  = Column(Text, nullable=False)   # JSON-serialised results snapshot
+    created_at    = Column(DateTime, default=datetime.utcnow)
+
+
+class RateAlert(Base):
+    __tablename__ = "rate_alerts"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    clerk_user_id   = Column(String, ForeignKey("users.clerk_user_id", ondelete="CASCADE"), nullable=False)
+    from_currency   = Column(String, nullable=False)
+    to_currency     = Column(String, nullable=False)
+    amount          = Column(Float, nullable=False)
+    target_rate     = Column(Float, nullable=False)
+    provider        = Column(String, nullable=True)   # None = any provider
+    notify_email    = Column(Boolean, default=True)
+    notify_whatsapp = Column(Boolean, default=False)
+    is_active       = Column(Boolean, default=True)
+    last_triggered  = Column(DateTime, nullable=True)
+    created_at      = Column(DateTime, default=datetime.utcnow)

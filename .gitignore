@@ -1,0 +1,31 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js
+.next/
+out/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Misc
+*.log
