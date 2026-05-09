@@ -120,7 +120,7 @@ class UserStatusResponse(BaseModel):
     exists: bool
 
 
-# ── Comparison schemas ────────────────────────────────────────────────────────
+# ──────────────── Comparison schemas ────────────────────────────────────────────────────────
 
 class ComparisonCreate(BaseModel):
     amount: float
@@ -142,7 +142,7 @@ class ComparisonRead(BaseModel):
         from_attributes = True
 
 
-# ── Rate Alert schemas ────────────────────────────────────────────────────────
+# ──────────────────────── Rate Alert schemas ────────────────────────────────────────────────────────
 
 class RateAlertCreate(BaseModel):
     from_currency: str

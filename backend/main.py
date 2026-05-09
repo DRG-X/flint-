@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 # Load .env before any other module reads environment variables
@@ -10,7 +11,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 # Make sure backend root is on the path so relative imports work cleanly
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
 from sqlalchemy.orm import Session
@@ -28,9 +29,8 @@ from engine.comparator import compare
 import models
 from database import engine, get_db
 from auth import verify_clerk_token
+from cache import get_cached_rates, set_cached_rates, init_cache, close_cache
 
-# Auto-create all tables (new ones are added without dropping existing data)
-models.Base.metadata.create_all(bind=engine)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -40,11 +40,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("flint")
 
+
+# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialise shared resources on startup; clean up on shutdown."""
+    await init_cache()   # connect Redis + PING test
+    yield
+    await close_cache()  # graceful shutdown
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Flint API",
     description="Real-time international money transfer comparison engine",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -54,6 +65,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate limiting (slowapi) ───────────────────────────────────────────────────
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -150,7 +170,6 @@ async def compare_providers(request: CompareRequest):
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
-user_router 
 @users_router.post("/sync", response_model=UserRead)
 def sync_user(body: UserSync, db: Session = Depends(get_db)):
     """
@@ -281,25 +300,38 @@ rates_router = APIRouter(prefix="/api/rates", tags=["rates"])
 
 
 @rates_router.get("")
+@limiter.limit("30/minute")  # 30 requests per minute per IP
 async def get_rates(
+    request: Request,
     from_currency: str = Query(..., alias="from"),
     to_currency: str   = Query(..., alias="to"),
     amount: float      = Query(..., gt=0),
 ):
     """
     Public GET endpoint for the results page.
-    Delegates to the existing comparator engine.
-    Returns { results, stale, no_data }.
+    Checks Redis cache first (bucketed by nearest-50 amount).
+    Falls back to the live comparator engine on a miss.
+    Returns { results, stale, no_data, cached }.
     """
+    from_upper = from_currency.upper()
+    to_upper   = to_currency.upper()
+
+    # ── Cache hit ─────────────────────────────────────────────────────────────
+    cached = await get_cached_rates(from_upper, to_upper, amount)
+    if cached:
+        logger.info("get_rates: returning cached response for %s→%s %.2f", from_upper, to_upper, amount)
+        return {**cached, "stale": False, "cached": True}
+
+    # ── Live fetch ────────────────────────────────────────────────────────────
     req = CompareRequest(
         amount=amount,
-        currency_from=from_currency.upper(),
-        currency_to=to_currency.upper(),
+        currency_from=from_upper,
+        currency_to=to_upper,
     )
     try:
         result = await compare(req)
         quotes_data = [q.model_dump() for q in result.quotes]
-        return {
+        response = {
             "results": quotes_data,
             "best_provider": result.best_provider.provider,
             "savings_vs_worst": result.savings_vs_worst,
@@ -307,12 +339,16 @@ async def get_rates(
             "failed_providers": result.failed_providers,
             "stale": False,
             "no_data": False,
+            "cached": False,
         }
+        await set_cached_rates(from_upper, to_upper, amount, response)
+        logger.info("get_rates: live response cached for %s→%s %.2f", from_upper, to_upper, amount)
+        return response
     except ValueError:
-        return {"results": [], "stale": False, "no_data": True, "failed_providers": []}
+        return {"results": [], "stale": False, "no_data": True, "failed_providers": [], "cached": False}
     except Exception:
         logger.exception("get_rates: unexpected error")
-        return {"results": [], "stale": False, "no_data": True, "failed_providers": []}
+        return {"results": [], "stale": False, "no_data": True, "failed_providers": [], "cached": False}
 
 
 app.include_router(rates_router)
