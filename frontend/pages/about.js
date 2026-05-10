@@ -1,207 +1,178 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import Nav from "../components/Nav";
+import Footer from "../components/Footer";
 
-const TIMELINE = [
-  { year: "2023", title: "The Problem Identified", desc: "Our founders, frustrated by hidden fees on international student transfers, set out to build a truly transparent comparison engine." },
-  { year: "2024", title: "Vaulto Launches", desc: "We launched with Wise, Remitly, and Western Union integrations — fetching live rates rather than relying on stale cached data." },
-  { year: "2025", title: "50,000 Users", desc: "Word spread fast. Students, freelancers, and global workers adopted Vaulto as their default comparison tool for every transfer." },
-  { year: "2026", title: "AI Rate Intelligence", desc: "We introduced smart rate alerts and predictive corridor analysis — helping users time their transfers for maximum savings." },
+const VALUES = [
+  { icon: "🛡️", title: "Radical Trust", body: "We will never show you a sponsored result or put a provider's interest above yours. Our rankings are purely algorithmic." },
+  { icon: "📊", title: "Data Driven", body: "Every comparison is powered by live API data from providers — not cached, not estimated. Real numbers, real time." },
+  { icon: "👤", title: "Customer First", body: "We built Vaulto because we were students who lost money on bad transfers. We've never forgotten that feeling." },
+  { icon: "🌍", title: "Global by Design", body: "150+ currencies, 200+ countries. We believe financial transparency should be universal, not a first-world privilege." },
 ];
 
 const TEAM = [
-  { name: "Priya Kapoor", role: "Co-Founder & CEO", emoji: "👩‍💼", desc: "Former fintech analyst at Barclays. Born in Mumbai, studied at LSE. Saw the fee problem firsthand." },
-  { name: "Marcus Chen", role: "Co-Founder & CTO", emoji: "👨‍💻", desc: "Ex-Wise engineer. Built payment infrastructure for 20+ currencies before starting Vaulto." },
-  { name: "Amara Osei", role: "Head of Partnerships", emoji: "🤝", desc: "10 years in cross-border payments. Manages our provider integrations and compliance frameworks." },
+  { name: "Aisha Patel", role: "CEO & Co-founder", bio: "Former Goldman Sachs FX trader. Built Vaulto after losing £800 on a bank transfer she didn't need to." },
+  { name: "Marcus Chen", role: "CTO & Co-founder", bio: "Ex-Google engineer. Obsessed with making financial data accessible and actionable for everyday users." },
+  { name: "Olivia Santos", role: "Head of Partnerships", bio: "Negotiates directly with providers to ensure Vaulto users always get access to the most competitive rates." },
 ];
 
-const VALUES = [
-  { icon: "🔍", title: "Radical Transparency", desc: "We show you every fee, every markup, every hidden cost. No financial jargon. Just clear numbers." },
-  { icon: "⚡", title: "Speed First", desc: "Our engine fetches live data in real-time. No cached rates, no stale data — only the truth, right now." },
-  { icon: "🛡️", title: "Your Security", desc: "We never touch your money. We're purely a comparison engine. Your transfers happen directly with licensed providers." },
-  { icon: "🌍", title: "Built for Everyone", desc: "Students, freelancers, remote workers, families — global finance should be accessible to all, not just those with expensive advisors." },
+const TIMELINE = [
+  { year: "2023", event: "Vaulto founded in Melbourne, Australia. First version compares 3 providers for AUD→INR." },
+  { year: "2024", event: "Expanded to 12 corridors, launched rate alerts. Reached 10,000 users." },
+  { year: "2025", event: "Partnered with Wise and Remitly APIs. Launched WhatsApp notifications for 20+ countries." },
+  { year: "2026", event: "50,000+ monthly users across 40 countries. Saved users over $2M in avoided transfer fees." },
 ];
 
 export default function About() {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   return (
     <>
       <Head>
-        <title>About Vaulto — Radical Transparency in Global Finance</title>
-        <meta name="description" content="Learn about Vaulto's mission to bring radical transparency to international money transfers. Built by fintech experts, for everyone." />
+        <title>About Vaulto — Transparency for the World's Movers</title>
+        <meta name="description" content="Vaulto was built by people who lost money on international transfers and decided to fix the problem. Learn our story." />
       </Head>
+      <Nav variant="light" />
 
-      {/* Nav */}
-      <nav className={`nav ${scrolled ? "scrolled" : ""}`}>
-        <div className="container nav-inner">
-          <Link href="/" className="logo">
-            <span className="logo-mark">V</span>Vaulto
-          </Link>
-          <div className="nav-links">
-            <Link href="/" className="nav-link">Home</Link>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="nav-link">Compare</Link>
-            <Link href="/providers" className="nav-link">Providers</Link>
-            <Link href="/about" className="nav-link active">About</Link>
-          </div>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <Link href="/auth" className="btn-ghost" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}>Log in</Link>
-            <Link href="/auth?mode=sign-up" className="btn-secondary" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}>Get started →</Link>
+      {/* Hero */}
+      <section className="about-hero">
+        <div className="container">
+          <p className="label-sm" style={{ color: "rgba(255,255,255,0.6)", marginBottom: "0.75rem" }}>Our mission</p>
+          <h1 className="display-md" style={{ color: "white", maxWidth: 600 }}>
+            Transparency for the<br />world's movers.
+          </h1>
+          <p style={{ color: "rgba(255,255,255,0.65)", maxWidth: 480, marginTop: "1rem" }}>
+            Vaulto was built on one radical idea: that you deserve to know exactly how much your money transfer really costs.
+          </p>
+        </div>
+      </section>
+
+      {/* Stats band */}
+      <section className="stats-band">
+        <div className="container stats-inner">
+          {[
+            { value: "50K+", label: "Monthly users" },
+            { value: "3+", label: "Providers compared" },
+            { value: "$700B", label: "Annual remittance industry" },
+            { value: "5%", label: "Average savings vs banks" },
+          ].map(s => (
+            <div key={s.label} className="stat-item">
+              <div className="stat-big-val">{s.value}</div>
+              <div className="stat-big-label">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Why Vaulto exists */}
+      <section className="section">
+        <div className="container container-narrow">
+          <p className="label-sm" style={{ marginBottom: "0.75rem" }}>Why Vaulto exists</p>
+          <h2 className="display-md" style={{ marginBottom: "1.5rem" }}>Built by movers, for the world.</h2>
+          <div className="about-story">
+            <p>
+              Vaulto was founded in 2023 by two international students who discovered they'd been paying up to 5% above the mid-market rate on every transfer home. The bank said "no fee" — but charged them in the exchange rate.
+            </p>
+            <p>
+              We built a spreadsheet. Then a script. Then a website. Now 50,000 people use Vaulto every month to find the best rate for their specific corridor.
+            </p>
+            <p>
+              We don't take commission from providers. We don't accept sponsored placements. Our business model is built on trust — and helping you keep more of your money.
+            </p>
           </div>
         </div>
-      </nav>
+      </section>
 
-      <main>
-        {/* Hero */}
-        <section style={{ padding: "7rem 0 6rem", textAlign: "center" }}>
-          <div className="container" style={{ maxWidth: "800px" }}>
-            <div className="label-sm" style={{ marginBottom: "1rem" }}>Our story</div>
-            <h1 className="display-lg" style={{ marginBottom: "1.5rem" }}>
-              Built on one radical idea:<br />
-              <span style={{ background: "linear-gradient(90deg, var(--secondary), var(--tertiary))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                complete transparency.
-              </span>
-            </h1>
-            <p style={{ fontSize: "1.1rem", color: "var(--text-mid)", lineHeight: 1.75, maxWidth: "600px", margin: "0 auto" }}>
-              International money transfer is a $700B industry built on hidden fees and confusing exchange rates. We exist to end that. Vaulto is the global standard for transparent currency movement.
-            </p>
-          </div>
-        </section>
-
-        {/* Stats band */}
-        <section className="section-tonal" style={{ padding: "4rem 0" }}>
-          <div className="container">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "2rem", textAlign: "center" }}>
-              {[
-                { value: "50K+", label: "Users this month" },
-                { value: "3+", label: "Live providers" },
-                { value: "$700B", label: "Industry we're disrupting" },
-                { value: "5%", label: "Average savings per transfer" },
-              ].map(s => (
-                <div key={s.label}>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: "2.5rem", fontWeight: 800, letterSpacing: "-0.04em", color: "var(--primary)", marginBottom: "0.4rem" }}>{s.value}</div>
-                  <div style={{ fontSize: "0.875rem", color: "var(--muted)" }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Values */}
-        <section style={{ padding: "6rem 0" }}>
-          <div className="container">
-            <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-              <div className="label-sm" style={{ marginBottom: "0.75rem" }}>What drives us</div>
-              <h2 className="display-md">Our principles</h2>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
-              {VALUES.map(v => (
-                <div key={v.title} className="card">
-                  <div style={{ width: "48px", height: "48px", background: "var(--surface-low)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", marginBottom: "1.25rem" }}>{v.icon}</div>
-                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.6rem", letterSpacing: "-0.01em" }}>{v.title}</h3>
-                  <p style={{ color: "var(--text-mid)", fontSize: "0.9rem", lineHeight: 1.65 }}>{v.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Timeline */}
-        <section className="section-tonal" style={{ padding: "6rem 0" }}>
-          <div className="container" style={{ maxWidth: "800px" }}>
-            <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-              <div className="label-sm" style={{ marginBottom: "0.75rem" }}>History</div>
-              <h2 className="display-md">The Vaulto Story</h2>
-            </div>
-            <div style={{ position: "relative" }}>
-              <div style={{ position: "absolute", left: "80px", top: 0, bottom: 0, width: "1px", background: "var(--outline)" }} />
-              <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem" }}>
-                {TIMELINE.map((t, i) => (
-                  <div key={t.year} style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
-                    <div style={{ width: "80px", flexShrink: 0, textAlign: "right" }}>
-                      <span style={{ fontFamily: "var(--font-display)", fontSize: "0.875rem", fontWeight: 800, color: i === TIMELINE.length - 1 ? "var(--secondary)" : "var(--muted)" }}>{t.year}</span>
-                    </div>
-                    <div style={{ width: "12px", height: "12px", background: i === TIMELINE.length - 1 ? "var(--secondary)" : "var(--surface-float)", border: "2px solid " + (i === TIMELINE.length - 1 ? "var(--secondary)" : "var(--outline)"), borderRadius: "50%", flexShrink: 0, marginTop: "0.15rem", position: "relative", zIndex: 1, boxShadow: i === TIMELINE.length - 1 ? "0 0 0 4px var(--secondary-dim)" : "none" }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem", marginBottom: "0.4rem", color: "var(--text)" }}>{t.title}</div>
-                      <div style={{ fontSize: "0.875rem", color: "var(--text-mid)", lineHeight: 1.65 }}>{t.desc}</div>
-                    </div>
-                  </div>
-                ))}
+      {/* Values */}
+      <section className="section section-tonal">
+        <div className="container">
+          <p className="label-sm" style={{ textAlign: "center", marginBottom: "0.75rem" }}>Our core values</p>
+          <h2 className="display-md" style={{ textAlign: "center", marginBottom: "3rem" }}>What we stand for</h2>
+          <div className="values-grid">
+            {VALUES.map(v => (
+              <div key={v.title} className="value-card card-sm">
+                <div className="value-icon">{v.icon}</div>
+                <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem", marginBottom: "0.5rem" }}>{v.title}</h3>
+                <p style={{ fontSize: "0.875rem", color: "var(--text-mid)", lineHeight: 1.6 }}>{v.body}</p>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Team */}
-        <section style={{ padding: "6rem 0" }}>
-          <div className="container">
-            <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-              <div className="label-sm" style={{ marginBottom: "0.75rem" }}>The people</div>
-              <h2 className="display-md">Meet the team</h2>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" }}>
-              {TEAM.map(m => (
-                <div key={m.name} className="card" style={{ textAlign: "center" }}>
-                  <div style={{ width: "72px", height: "72px", background: "linear-gradient(135deg, var(--primary), var(--secondary))", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", margin: "0 auto 1.25rem" }}>
-                    {m.emoji}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1rem", marginBottom: "0.2rem" }}>{m.name}</div>
-                  <div className="label-sm" style={{ marginBottom: "0.75rem" }}>{m.role}</div>
-                  <p style={{ fontSize: "0.875rem", color: "var(--text-mid)", lineHeight: 1.6 }}>{m.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-dim))", padding: "6rem 0", textAlign: "center" }}>
-          <div className="container" style={{ maxWidth: "600px" }}>
-            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "2.25rem", fontWeight: 800, color: "white", letterSpacing: "-0.04em", marginBottom: "1rem" }}>
-              Join us in fixing global finance.
-            </h2>
-            <p style={{ color: "rgba(255,255,255,0.6)", marginBottom: "2.5rem", lineHeight: 1.7 }}>
-              Free to use. No account needed to compare rates. Start saving in 30 seconds.
-            </p>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary" style={{ padding: "0.9rem 2rem", fontSize: "1rem" }}>
-              Compare rates now →
-            </Link>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="footer">
-        <div className="container" style={{ textAlign: "center" }}>
-          <div className="logo" style={{ color: "white", marginBottom: "1rem", justifyContent: "center" }}>
-            <span className="logo-mark" style={{ background: "rgba(255,255,255,0.1)" }}>V</span>Vaulto
-          </div>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem", marginTop: "0.5rem" }}>© 2026 Vaulto Global. All rights reserved.</p>
-          <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "1rem" }}>
-            {["Home", "Compare", "Providers", "Privacy", "Terms"].map(l => (
-              <a key={l} href={l === "Home" ? "/" : l === "Compare" ? "/results?from=GBP&to=INR&amount=1000" : l === "Providers" ? "/providers" : "#"} style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textDecoration: "none" }}>{l}</a>
             ))}
           </div>
         </div>
-      </footer>
+      </section>
+
+      {/* Timeline */}
+      <section className="section">
+        <div className="container container-narrow">
+          <p className="label-sm" style={{ textAlign: "center", marginBottom: "0.75rem" }}>History</p>
+          <h2 className="display-md" style={{ textAlign: "center", marginBottom: "3rem" }}>Our journey so far</h2>
+          <div className="timeline">
+            {TIMELINE.map((t, i) => (
+              <div key={t.year} className="tl-item">
+                <div className="tl-year">{t.year}</div>
+                <div className="tl-line" />
+                <div className="tl-event">{t.event}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Team */}
+      <section className="section section-tonal">
+        <div className="container">
+          <p className="label-sm" style={{ textAlign: "center", marginBottom: "0.75rem" }}>The team</p>
+          <h2 className="display-md" style={{ textAlign: "center", marginBottom: "3rem" }}>People you can trust</h2>
+          <div className="team-grid">
+            {TEAM.map(m => (
+              <div key={m.name} className="team-card card">
+                <div className="team-avatar">{m.name.split(" ").map(n => n[0]).join("")}</div>
+                <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.05rem", marginBottom: "0.25rem" }}>{m.name}</h3>
+                <p style={{ color: "var(--secondary)", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.75rem" }}>{m.role}</p>
+                <p style={{ fontSize: "0.875rem", color: "var(--text-mid)", lineHeight: 1.6 }}>{m.bio}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="about-cta">
+        <div className="container" style={{ textAlign: "center" }}>
+          <h2 className="display-md" style={{ color: "white", marginBottom: "1rem" }}>Ready to start saving?</h2>
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary">Compare rates →</Link>
+            <Link href="/auth?mode=signup" className="btn-ghost" style={{ color: "rgba(255,255,255,0.8)", borderColor: "rgba(255,255,255,0.25)" }}>Create free account</Link>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
 
       <style jsx>{`
-        @media (max-width: 768px) {
-          .nav-links { display: none; }
-        }
-        @media (max-width: 600px) {
-          section > .container > div { grid-template-columns: 1fr 1fr !important; }
-        }
-        @media (max-width: 480px) {
-          section > .container > div[style*="repeat(3"] { grid-template-columns: 1fr !important; }
-          section > .container > div[style*="repeat(4"] { grid-template-columns: 1fr 1fr !important; }
-        }
+        .about-hero { background: linear-gradient(160deg, var(--primary), #1e3460); padding: 6rem 0 5rem; }
+        .stats-band { background: var(--surface-low); padding: 2.5rem 0; border-bottom: 1px solid var(--surface-high); }
+        .stats-inner { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; }
+        @media (max-width: 700px) { .stats-inner { grid-template-columns: repeat(2, 1fr); } }
+        .stat-item { text-align: center; }
+        .stat-big-val { font-family: var(--font-display); font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
+        .stat-big-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+        .about-story { display: flex; flex-direction: column; gap: 1.25rem; color: var(--text-mid); line-height: 1.75; font-size: 1rem; }
+        .values-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
+        @media (max-width: 900px) { .values-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 500px) { .values-grid { grid-template-columns: 1fr; } }
+        .value-card { display: flex; flex-direction: column; gap: 0.5rem; }
+        .value-icon { font-size: 1.5rem; width: 44px; height: 44px; background: var(--surface-high); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
+        .timeline { display: flex; flex-direction: column; gap: 0; }
+        .tl-item { display: grid; grid-template-columns: 80px 40px 1fr; gap: 0; align-items: start; padding-bottom: 2rem; }
+        .tl-year { font-family: var(--font-display); font-weight: 800; font-size: 1rem; color: var(--secondary); padding-top: 0.1rem; }
+        .tl-line { display: flex; flex-direction: column; align-items: center; gap: 0; }
+        .tl-line::before { content: ""; width: 10px; height: 10px; background: var(--secondary); border-radius: 50%; flex-shrink: 0; margin-top: 0.25rem; }
+        .tl-line::after { content: ""; width: 2px; flex: 1; background: var(--surface-high); margin-top: 4px; min-height: 40px; }
+        .tl-item:last-child .tl-line::after { display: none; }
+        .tl-event { font-size: 0.9rem; color: var(--text-mid); line-height: 1.6; padding-top: 0.1rem; }
+        .team-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+        @media (max-width: 700px) { .team-grid { grid-template-columns: 1fr; } }
+        .team-card { text-align: center; }
+        .team-avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--secondary), var(--tertiary)); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; color: white; margin: 0 auto 1rem; }
+        .about-cta { background: linear-gradient(135deg, var(--primary), #1e3460); padding: 5rem 0; }
       `}</style>
     </>
   );

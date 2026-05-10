@@ -1,22 +1,12 @@
 import { useState, useEffect } from "react";
-import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useAuth } from "@clerk/nextjs";
-import { listAlerts, updateAlert, deleteAlert, getMe } from "../lib/api";
+import Head from "next/head";
+import Link from "next/link";
+import Nav from "../components/Nav";
+import Footer from "../components/Footer";
 import AlertModal from "../components/AlertModal";
-
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function StatusPill({ active }) {
-  return (
-    <span className={`pill ${active ? "pill-tertiary" : "pill-muted"}`} style={{ fontSize: "0.65rem" }}>
-      {active ? "● Active" : "⏸ Paused"}
-    </span>
-  );
-}
+import { listAlerts, updateAlert, deleteAlert, getMe } from "../lib/api";
 
 export default function Alerts() {
   const router = useRouter();
@@ -26,241 +16,224 @@ export default function Alerts() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [modal, setModal] = useState({ open: false, edit: null });
-  const [deleting, setDeleting] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editAlert, setEditAlert] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) router.replace("/auth");
-  }, [isLoaded, isSignedIn, router]);
+    if (!isLoaded) return;
+    if (!isSignedIn) { router.replace("/auth"); return; }
+    loadData();
+  }, [isLoaded, isSignedIn]);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const token = await getToken();
-        const [alts, me] = await Promise.all([listAlerts(token), getMe(token)]);
-        setAlerts(alts);
-        setProfile(me);
-      } catch (err) {
-        setError(err.message || "Failed to load alerts.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    run();
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const handleToggle = async (alert) => {
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
     try {
       const token = await getToken();
-      const updated = await updateAlert(token, alert.id, { is_active: !alert.is_active });
-      setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      const [alts, me] = await Promise.all([listAlerts(token), getMe(token)]);
+      setAlerts(alts?.items || alts || []);
+      setProfile(me);
+    } catch (e) {
+      setError(e.message || "Failed to load alerts.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = async (alert) => {
+    const optimistic = alerts.map(a => a.id === alert.id ? { ...a, is_active: !a.is_active } : a);
+    setAlerts(optimistic);
+    try {
+      const token = await getToken();
+      await updateAlert(token, alert.id, { is_active: !alert.is_active });
     } catch {
-      setError("Failed to update alert.");
+      setAlerts(alerts); // rollback
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this alert?")) return;
-    setDeleting(id);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    if (!confirm("Delete this alert?")) return;
+    const prev = alerts;
+    setAlerts(alerts.filter(a => a.id !== id));
+    setDeletingId(id);
     try {
       const token = await getToken();
       await deleteAlert(token, id);
     } catch {
-      setError("Delete failed. Refreshing…");
-      try {
-        const token = await getToken();
-        setAlerts(await listAlerts(token));
-      } catch (_) {}
+      setAlerts(prev);
     } finally {
-      setDeleting(null);
+      setDeletingId(null);
     }
   };
 
-  const handleSaved = (saved) => {
-    setAlerts((prev) => {
-      const idx = prev.findIndex((a) => a.id === saved.id);
-      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
-      return [saved, ...prev];
-    });
-  };
-
-  const activeAlerts = alerts.filter(a => a.is_active);
-  const pausedAlerts = alerts.filter(a => !a.is_active);
+  const activeAlerts = alerts.filter(a => a.is_active !== false);
+  const pausedAlerts = alerts.filter(a => a.is_active === false);
 
   return (
     <>
       <Head>
         <title>Rate Alerts — Vaulto</title>
-        <meta name="description" content="Manage your rate alerts on Vaulto. Get notified when exchange rates hit your target." />
+        <meta name="description" content="Manage your Vaulto rate alerts. Get notified when your target exchange rate is reached." />
       </Head>
+      <Nav variant="light" showDashboardLink />
 
-      {/* Nav */}
-      <nav className="nav">
-        <div className="container nav-inner">
-          <Link href="/" className="logo">
-            <span className="logo-mark">V</span>
-            Vaulto
-          </Link>
-          <div className="nav-links">
-            <Link href="/dashboard" className="nav-link">← Dashboard</Link>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="nav-link">Compare</Link>
-          </div>
-          <button
-            className="btn-primary"
-            style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}
-            onClick={() => setModal({ open: true, edit: null })}
-          >
-            + New Alert
-          </button>
-        </div>
-      </nav>
-
-      <main style={{ padding: "3rem 0 6rem" }}>
-        <div className="container" style={{ maxWidth: "960px" }}>
-          {/* Header */}
-          <div style={{ marginBottom: "2.5rem" }}>
-            <div className="label-sm" style={{ marginBottom: "0.4rem" }}>Monitoring</div>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: "2rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: "0.4rem" }}>
-              Rate Alerts
-            </h1>
-            <p style={{ color: "var(--text-mid)", fontSize: "0.95rem" }}>
-              We monitor exchange rates 24/7 and notify you when your target rate is hit.
-            </p>
+      <div className="alerts-page">
+        <div className="container">
+          <div className="alerts-header">
+            <div>
+              <p className="label-sm" style={{ marginBottom: "0.4rem" }}>
+                <Link href="/dashboard" style={{ color: "var(--secondary)", textDecoration: "none" }}>← Dashboard</Link>
+              </p>
+              <h1 className="display-md">Rate Alerts</h1>
+              <p style={{ color: "var(--muted)", marginTop: "0.5rem" }}>
+                Get notified when exchange rates hit your target.
+              </p>
+            </div>
+            <button
+              className="btn-secondary"
+              onClick={() => { setEditAlert(null); setModalOpen(true); }}
+              id="new-alert-btn"
+            >
+              + New Alert
+            </button>
           </div>
 
-          {error && <div className="error-box" style={{ marginBottom: "1.5rem" }}>⚠ {error}</div>}
+          {error && (
+            <div className="error-box">⚠️ {error}
+              <button onClick={loadData} style={{ marginLeft: "1rem", background: "none", border: "none", cursor: "pointer", color: "inherit", textDecoration: "underline" }}>Retry</button>
+            </div>
+          )}
 
           {loading ? (
-            <div className="loading-box"><div className="spinner" />Loading alerts…</div>
+            <div className="loading-box"><div className="spinner" /><p>Loading alerts…</p></div>
           ) : alerts.length === 0 ? (
-            /* Empty state */
-            <div className="card" style={{ textAlign: "center", padding: "5rem 2rem" }}>
-              <div style={{ width: "72px", height: "72px", background: "var(--secondary-dim)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", margin: "0 auto 1.5rem" }}>
-                🔔
-              </div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.6rem" }}>No alerts yet</h2>
-              <p style={{ color: "var(--muted)", marginBottom: "2rem", maxWidth: "340px", margin: "0 auto 2rem" }}>
-                Create a rate alert and we'll notify you when your corridor hits your target rate.
-              </p>
-              <button className="btn-primary" style={{ margin: "0 auto", width: "auto" }} onClick={() => setModal({ open: true, edit: null })}>
-                Create your first alert
+            <div className="alerts-empty card">
+              <div className="empty-icon">🔔</div>
+              <h2>No rate alerts yet</h2>
+              <p>Set a target rate and we'll notify you when it's reached.</p>
+              <button className="btn-secondary" onClick={() => setModalOpen(true)} style={{ marginTop: "1rem" }} id="create-first-alert">
+                Create your first alert →
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-              {/* Active alerts */}
+            <>
+              {/* Active */}
               {activeAlerts.length > 0 && (
-                <div>
-                  <div className="label-sm" style={{ marginBottom: "1rem" }}>Active ({activeAlerts.length})</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    {activeAlerts.map(a => (
-                      <AlertCard key={a.id} alert={a} onToggle={handleToggle} onEdit={() => setModal({ open: true, edit: a })} onDelete={handleDelete} deleting={deleting} />
-                    ))}
+                <div className="alerts-section">
+                  <div className="section-title">
+                    <p className="label-sm">Active</p>
+                    <span className="count-pill">{activeAlerts.length}</span>
+                  </div>
+                  <div className="alerts-grid">
+                    {activeAlerts.map(a => <AlertCard key={a.id} alert={a} onToggle={handleToggle} onEdit={(a) => { setEditAlert(a); setModalOpen(true); }} onDelete={handleDelete} deleting={deletingId === a.id} />)}
                   </div>
                 </div>
               )}
-
-              {/* Paused alerts */}
+              {/* Paused */}
               {pausedAlerts.length > 0 && (
-                <div>
-                  <div className="label-sm" style={{ marginBottom: "1rem" }}>Paused ({pausedAlerts.length})</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    {pausedAlerts.map(a => (
-                      <AlertCard key={a.id} alert={a} onToggle={handleToggle} onEdit={() => setModal({ open: true, edit: a })} onDelete={handleDelete} deleting={deleting} />
-                    ))}
+                <div className="alerts-section">
+                  <div className="section-title">
+                    <p className="label-sm">Paused</p>
+                    <span className="count-pill count-muted">{pausedAlerts.length}</span>
+                  </div>
+                  <div className="alerts-grid">
+                    {pausedAlerts.map(a => <AlertCard key={a.id} alert={a} onToggle={handleToggle} onEdit={(a) => { setEditAlert(a); setModalOpen(true); }} onDelete={handleDelete} deleting={deletingId === a.id} />)}
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
-      </main>
+      </div>
 
       <AlertModal
-        isOpen={modal.open}
-        onClose={() => setModal({ open: false, edit: null })}
-        onSuccess={handleSaved}
+        isOpen={modalOpen}
+        onClose={() => { setModalOpen(false); setEditAlert(null); }}
+        onSuccess={(result) => {
+          if (editAlert) {
+            setAlerts(prev => prev.map(a => a.id === result.id ? result : a));
+          } else {
+            setAlerts(prev => [result, ...prev]);
+          }
+          setModalOpen(false);
+          setEditAlert(null);
+        }}
         defaultFrom={profile?.corridor_from || "GBP"}
         defaultTo={profile?.corridor_to || "INR"}
         defaultAmount={1000}
-        editAlert={modal.edit}
-        userWhatsapp={profile?.whatsapp_number || null}
+        editAlert={editAlert}
+        userWhatsapp={profile?.whatsapp_number}
       />
+
+      <Footer />
+
+      <style jsx>{`
+        .alerts-page { padding: 3rem 0 6rem; min-height: 70vh; }
+        .alerts-header {
+          display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
+        }
+        .alerts-section { margin-bottom: 2.5rem; }
+        .section-title { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+        .count-pill {
+          background: var(--secondary-dim); color: var(--secondary);
+          font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.55rem;
+          border-radius: var(--radius-full);
+        }
+        .count-muted { background: var(--surface-high); color: var(--muted); }
+        .alerts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+        .alerts-empty { text-align: center; padding: 4rem 2rem; }
+        .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .alerts-empty h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; margin-bottom: 0.5rem; }
+        .alerts-empty p { color: var(--muted); font-size: 0.875rem; }
+      `}</style>
     </>
   );
 }
 
-function AlertCard({ alert: a, onToggle, onEdit, onDelete, deleting }) {
+function AlertCard({ alert, onToggle, onEdit, onDelete, deleting }) {
+  const isActive = alert.is_active !== false;
   return (
-    <div className="card" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", transition: "box-shadow 0.2s, transform 0.15s", cursor: "default" }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--shadow-md)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--shadow-sm)"; e.currentTarget.style.transform = "translateY(0)"; }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", flex: 1 }}>
-        {/* Corridor */}
-        <div style={{ minWidth: "110px" }}>
-          <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.05rem", color: "var(--text)", letterSpacing: "-0.01em" }}>
-            {a.from_currency} → {a.to_currency}
-          </div>
-          <StatusPill active={a.is_active} />
-        </div>
-
-        {/* Details */}
-        <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
-          <div>
-            <div className="label-sm" style={{ marginBottom: "0.15rem" }}>Target rate</div>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem", color: a.is_active ? "var(--tertiary)" : "var(--muted)" }}>
-              {a.target_rate}
-            </div>
-          </div>
-          <div>
-            <div className="label-sm" style={{ marginBottom: "0.15rem" }}>Amount</div>
-            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-mid)" }}>{a.amount}</div>
-          </div>
-          <div>
-            <div className="label-sm" style={{ marginBottom: "0.15rem" }}>Provider</div>
-            <div style={{ fontSize: "0.9rem", color: "var(--text-mid)" }}>{a.provider || "Any"}</div>
-          </div>
-          <div>
-            <div className="label-sm" style={{ marginBottom: "0.15rem" }}>Notify via</div>
-            <div style={{ fontSize: "0.8rem", color: "var(--text-mid)" }}>
-              {[a.notify_email && "Email", a.notify_whatsapp && "WhatsApp"].filter(Boolean).join(" + ") || "—"}
-            </div>
-          </div>
-          <div>
-            <div className="label-sm" style={{ marginBottom: "0.15rem" }}>Created</div>
-            <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{fmtDate(a.created_at)}</div>
-          </div>
-        </div>
+    <div className={`ac-card card ${!isActive ? "ac-paused" : ""}`}>
+      <div className="ac-header">
+        <div className="ac-corridor">{alert.from_currency} → {alert.to_currency}</div>
+        <span className={`pill ${isActive ? "pill-tertiary" : "pill-muted"}`}>
+          {isActive ? "● Active" : "⏸ Paused"}
+        </span>
       </div>
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-        <button
-          onClick={() => onToggle(a)}
-          className="btn-ghost"
-          style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
-          title={a.is_active ? "Pause" : "Resume"}
-        >
-          {a.is_active ? "⏸ Pause" : "▶ Resume"}
+      <div className="ac-details">
+        <div className="ac-row"><span className="ac-label">Target rate</span><span className="ac-val">{alert.target_rate}</span></div>
+        <div className="ac-row"><span className="ac-label">Amount</span><span className="ac-val">{alert.amount} {alert.from_currency}</span></div>
+        <div className="ac-row"><span className="ac-label">Provider</span><span className="ac-val">{alert.provider || "Any"}</span></div>
+        <div className="ac-row"><span className="ac-label">Notify via</span>
+          <span className="ac-val">
+            {[alert.notify_email && "Email", alert.notify_whatsapp && "WhatsApp"].filter(Boolean).join(" + ") || "Email"}
+          </span>
+        </div>
+        <div className="ac-row"><span className="ac-label">Created</span><span className="ac-val">{new Date(alert.created_at).toLocaleDateString()}</span></div>
+      </div>
+      <div className="ac-actions">
+        <button className="btn-ghost-sm" onClick={() => onToggle(alert)} id={`toggle-alert-${alert.id}`}>
+          {isActive ? "⏸ Pause" : "▶ Resume"}
         </button>
-        <button onClick={onEdit} className="btn-ghost" style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }} title="Edit">
-          ✏️ Edit
-        </button>
-        <button
-          onClick={() => onDelete(a.id)}
-          disabled={deleting === a.id}
-          style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem", background: "none", border: "1px solid var(--outline)", borderRadius: "var(--radius-md)", cursor: "pointer", color: "var(--error)", transition: "background 0.15s, border-color 0.15s" }}
-          onMouseEnter={e => { e.currentTarget.style.background = "var(--error-surface)"; e.currentTarget.style.borderColor = "var(--error)"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.borderColor = "var(--outline)"; }}
-          title="Delete"
-        >
-          🗑 Delete
+        <button className="btn-ghost-sm" onClick={() => onEdit(alert)} id={`edit-alert-${alert.id}`}>✏️ Edit</button>
+        <button className="btn-ghost-sm ac-delete" onClick={() => onDelete(alert.id)} disabled={deleting} id={`delete-alert-${alert.id}`}>
+          {deleting ? "…" : "🗑"}
         </button>
       </div>
+      <style jsx>{`
+        .ac-card { transition: box-shadow 0.2s; }
+        .ac-paused { opacity: 0.7; }
+        .ac-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .ac-corridor { font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; color: var(--text); }
+        .ac-details { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+        .ac-row { display: flex; justify-content: space-between; font-size: 0.85rem; }
+        .ac-label { color: var(--muted); }
+        .ac-val { font-weight: 600; color: var(--text-mid); }
+        .ac-actions { display: flex; gap: 0.5rem; }
+        .ac-delete:hover:not(:disabled) { border-color: var(--error) !important; color: var(--error) !important; }
+      `}</style>
     </div>
   );
 }

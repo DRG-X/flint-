@@ -1,235 +1,229 @@
-import { useState, useEffect, useMemo } from "react";
-import Head from "next/head";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@clerk/nextjs";
+import Head from "next/head";
+import Link from "next/link";
+import Nav from "../components/Nav";
+import Footer from "../components/Footer";
 import { listComparisons } from "../lib/api";
 
-const LIMIT = 20;
+const fmt = (n, dec = 2) =>
+  new Intl.NumberFormat("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
 
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
-  });
-}
-
-function fmt(n) {
-  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function exportCSV(rows) {
-  const headers = ["Date", "From", "To", "Amount", "Best Rate", "Best Provider"];
-  const lines = rows.map((r) => {
-    let bestProvider = "—";
-    let bestRate = "—";
-    try {
-      const results = JSON.parse(r.results_json);
-      if (results?.length > 0) {
-        bestProvider = results[0].provider;
-        bestRate = results[0].exchange_rate;
-      }
-    } catch (_) {}
-    return [
-      fmtDate(r.created_at),
-      r.from_currency,
-      r.to_currency,
-      fmt(r.amount),
-      bestRate,
-      bestProvider,
-    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
-  });
-
-  const csv = [headers.join(","), ...lines].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `vaulto-history-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+function parseResults(json) {
+  try {
+    const r = JSON.parse(json || "[]");
+    const sorted = [...r].sort((a, b) => b.receive_amount - a.receive_amount);
+    return { bestProvider: sorted[0]?.provider || "—", bestRate: sorted[0]?.exchange_rate };
+  } catch { return { bestProvider: "—", bestRate: null }; }
 }
 
 export default function History() {
   const router = useRouter();
   const { isLoaded, isSignedIn, getToken } = useAuth();
 
-  const [rows, setRows]         = useState([]);
-  const [page, setPage]         = useState(1);
-  const [hasMore, setHasMore]   = useState(true);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState("");
-  const [search, setSearch]     = useState("");
+  const [comparisons, setComparisons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [filter, setFilter] = useState("");
 
-  // Auth guard
   useEffect(() => {
-    if (isLoaded && !isSignedIn) router.replace("/auth");
-  }, [isLoaded, isSignedIn, router]);
+    if (!isLoaded) return;
+    if (!isSignedIn) { router.replace("/auth"); return; }
+    loadComparisons(page);
+  }, [isLoaded, isSignedIn, page]);
 
-  const fetchPage = async (p) => {
-    if (!isLoaded || !isSignedIn) return;
+  const loadComparisons = async (p) => {
     setLoading(true);
     setError("");
     try {
       const token = await getToken();
-      const data = await listComparisons(token, { page: p, limit: LIMIT });
-      setRows(data);
-      setHasMore(data.length === LIMIT);
-    } catch (err) {
-      setError(err.message || "Failed to load history.");
+      const data = await listComparisons(token, { page: p, limit: 20 });
+      const items = data?.items || data || [];
+      setComparisons(items);
+      setHasMore(items.length === 20);
+    } catch (e) {
+      setError(e.message || "Failed to load history.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isLoaded && isSignedIn) fetchPage(page);
-  }, [isLoaded, isSignedIn, page]);
+  const filtered = comparisons.filter(c => {
+    if (!filter) return true;
+    const q = filter.toUpperCase();
+    return c.from_currency?.includes(q) || c.to_currency?.includes(q);
+  });
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return rows;
-    const q = search.toLowerCase();
-    return rows.filter(
-      (r) =>
-        r.from_currency.toLowerCase().includes(q) ||
-        r.to_currency.toLowerCase().includes(q)
-    );
-  }, [rows, search]);
+  const exportCSV = () => {
+    const headers = ["Date", "From", "To", "Amount", "Best Rate", "Best Provider"];
+    const rows = filtered.map(c => {
+      const { bestProvider, bestRate } = parseResults(c.results_json);
+      return [
+        new Date(c.created_at).toLocaleDateString(),
+        c.from_currency, c.to_currency,
+        c.amount, bestRate || "—", bestProvider,
+      ];
+    });
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "vaulto-history.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <>
       <Head>
         <title>Transfer History — Vaulto</title>
-        <meta name="description" content="Your comparison history on Vaulto" />
+        <meta name="description" content="View your Vaulto comparison history and re-run past searches." />
       </Head>
+      <Nav variant="light" showDashboardLink />
 
-      <nav className="nav">
-        <div className="container nav-inner">
-          <Link href="/" className="logo">
-            <span className="logo-mark">V</span>Vaulto
-          </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <Link href="/dashboard" className="nav-link">← Dashboard</Link>
+      <div className="history-page">
+        <div className="container">
+          <div className="history-header">
+            <div>
+              <p className="label-sm" style={{ marginBottom: "0.4rem" }}>
+                <Link href="/dashboard" style={{ color: "var(--secondary)", textDecoration: "none" }}>← Dashboard</Link>
+              </p>
+              <h1 className="display-md">Transfer History</h1>
+            </div>
+            <div className="history-actions">
+              <input
+                type="text"
+                placeholder="Filter by currency…"
+                value={filter}
+                onChange={e => setFilter(e.target.value)}
+                className="history-filter"
+                id="history-filter"
+              />
+              <button
+                className="btn-ghost"
+                onClick={exportCSV}
+                disabled={filtered.length === 0}
+                id="export-csv"
+              >
+                ↓ Export CSV
+              </button>
+            </div>
           </div>
-        </div>
-      </nav>
 
-      <main className="container" style={{ paddingTop: "2.5rem", paddingBottom: "5rem" }}>
-        <div style={{ marginBottom: "2rem" }}>
-          <div className="label-sm" style={{ marginBottom: "0.4rem" }}>Account</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: "2rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em" }}>
-              Transfer History
-            </h1>
-            <button
-              className="btn-ghost"
-              style={{ padding: "0.55rem 1rem", fontSize: "0.875rem" }}
-              onClick={() => exportCSV(filtered)}
-              disabled={filtered.length === 0}
-            >
-              ↓ Export CSV
-            </button>
-          </div>
-        </div>
+          {error && <div className="error-box">⚠️ {error}</div>}
 
-        {/* Search */}
-        <div className="field" style={{ maxWidth: 300, marginBottom: "1.25rem" }}>
-          <label htmlFor="hist-search">Filter by currency</label>
-          <input
-            id="hist-search"
-            type="text"
-            placeholder="e.g. GBP, INR"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {error && <div className="error-box" style={{ marginBottom: "1rem" }}>⚠ {error}</div>}
-
-        {loading ? (
-          <div className="loading-box"><div className="spinner" />Loading history…</div>
-        ) : filtered.length === 0 ? (
-          <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-            <p style={{ color: "var(--muted)", marginBottom: "1.25rem" }}>
-              {search ? "No results match your filter." : "You haven't run any comparisons yet."}
-            </p>
-            <a href="/" className="btn-compare" style={{ textDecoration: "none", display: "inline-block", width: "auto", padding: "0.65rem 1.25rem" }}>
-              Try a comparison →
-            </a>
-          </div>
-        ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Corridor</th>
-                  <th>Amount</th>
-                  <th>Best Rate</th>
-                  <th>Best Provider</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  let bestProvider = "—";
-                  let bestRate = "—";
-                  try {
-                    const results = JSON.parse(r.results_json);
-                    if (results?.length > 0) {
-                      bestProvider = results[0].provider;
-                      bestRate = results[0].exchange_rate?.toFixed(4) || "—";
-                    }
-                  } catch (_) {}
-                  return (
-                    <tr key={r.id}>
-                      <td className="td-mono" style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-                        {fmtDate(r.created_at)}
-                      </td>
-                      <td style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>
-                        {r.from_currency} → {r.to_currency}
-                      </td>
-                      <td className="td-mono">{fmt(r.amount)}</td>
-                      <td className="td-mono td-receive">{bestRate}</td>
-                      <td>{bestProvider}</td>
-                      <td>
-                        <a
-                          href={`/results?from=${r.from_currency}&to=${r.to_currency}&amount=${r.amount}`}
-                          style={{ color: "var(--secondary)", fontSize: "0.78rem", textDecoration: "none" }}
-                        >
-                          Re-run →
-                        </a>
-                      </td>
+          {loading ? (
+            <div className="loading-box"><div className="spinner" /><p>Loading history…</p></div>
+          ) : filtered.length === 0 ? (
+            <div className="history-empty card">
+              <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>📊</div>
+              <h2>No comparisons yet</h2>
+              <p style={{ color: "var(--muted)", margin: "0.5rem 0 1.5rem" }}>Your saved comparisons will appear here.</p>
+              <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary" id="history-try-compare">
+                Try a comparison →
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Corridor</th>
+                      <th>Amount</th>
+                      <th>Best Rate</th>
+                      <th>Best Provider</th>
+                      <th></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </thead>
+                  <tbody>
+                    {filtered.map((c, i) => {
+                      const { bestProvider, bestRate } = parseResults(c.results_json);
+                      return (
+                        <tr key={i}>
+                          <td style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                            {new Date(c.created_at).toLocaleDateString()}
+                          </td>
+                          <td>
+                            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>
+                              {c.from_currency} → {c.to_currency}
+                            </span>
+                          </td>
+                          <td>{fmt(c.amount)} {c.from_currency}</td>
+                          <td style={{ color: "var(--tertiary)", fontWeight: 700 }}>
+                            {bestRate ? fmt(bestRate, 4) : "—"}
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{bestProvider}</td>
+                          <td>
+                            <Link
+                              href={`/results?from=${c.from_currency}&to=${c.to_currency}&amount=${c.amount}`}
+                              style={{ color: "var(--secondary)", fontSize: "0.85rem", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              Re-run →
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-        {/* Pagination */}
-        {!loading && (
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem", justifyContent: "center" }}>
-            <button
-              className="btn-ghost"
-              style={{ width: "auto", padding: "0.6rem 1.1rem", fontSize: "0.85rem" }}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              ← Previous
-            </button>
-            <span style={{ color: "var(--muted)", fontSize: "0.85rem", alignSelf: "center" }}>Page {page}</span>
-            <button
-              className="btn-compare"
-              style={{ width: "auto", padding: "0.6rem 1.1rem", fontSize: "0.85rem", opacity: !hasMore ? 0.4 : 1 }}
-              onClick={() => setPage((p) => p + 1)}
-              disabled={!hasMore}
-            >
-              Next →
-            </button>
-          </div>
-        )}
-      </main>
+              {/* Pagination */}
+              <div className="pagination">
+                <button
+                  className="btn-ghost"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  id="prev-page"
+                >
+                  ← Previous
+                </button>
+                <span className="page-indicator">Page {page}</span>
+                <button
+                  className="btn-ghost"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!hasMore}
+                  id="next-page"
+                >
+                  Next →
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <Footer />
+
+      <style jsx>{`
+        .history-page { padding: 3rem 0 6rem; min-height: 70vh; }
+        .history-header {
+          display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
+        }
+        .history-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+        .history-filter {
+          padding: 0.65rem 1rem;
+          background: var(--surface-float);
+          border: 1px solid var(--surface-high);
+          border-radius: var(--radius-md);
+          font-family: var(--font-body);
+          font-size: 0.875rem;
+          color: var(--text);
+          outline: none;
+          transition: border-color 0.15s;
+          width: 200px;
+        }
+        .history-filter:focus { border-color: var(--secondary); }
+        .history-empty { text-align: center; padding: 4rem 2rem; }
+        .history-empty h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; }
+        .pagination { display: flex; align-items: center; gap: 1rem; justify-content: center; margin-top: 2rem; }
+        .page-indicator { font-size: 0.875rem; color: var(--muted); }
+      `}</style>
     </>
   );
 }

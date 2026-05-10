@@ -1,474 +1,485 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { useAuth, useUser, useClerk } from "@clerk/nextjs";
 import Head from "next/head";
 import Link from "next/link";
-import { useRouter } from "next/router";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { getMe, listComparisons, listAlerts, updateAlert } from "../lib/api";
 import CompareWidget from "../components/CompareWidget";
 import AlertModal from "../components/AlertModal";
+import { getMe, listComparisons, listAlerts } from "../lib/api";
 
-function greeting() {
+const NAV_ITEMS = [
+  { href: "/dashboard", icon: "⊞", label: "Dashboard" },
+  { href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
+  { href: "/history", icon: "📋", label: "History" },
+  { href: "/alerts", icon: "🔔", label: "Alerts" },
+  { href: "/insights", icon: "📊", label: "Insights" },
+];
+
+function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
 
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function fmtNum(n) {
-  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function Skeleton({ lines = 3 }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="skeleton-line" style={{ width: i % 2 === 0 ? "80%" : "55%", height: "12px" }} />
-      ))}
-    </div>
-  );
-}
-
-const NAV_ITEMS = [
-  { icon: "⊞", label: "Dashboard", href: "/dashboard", key: "dashboard" },
-  { icon: "⇄", label: "Transfers", href: "/results?from=GBP&to=INR&amount=1000", key: "transfers" },
-  { icon: "📋", label: "History", href: "/history", key: "history" },
-  { icon: "🔔", label: "Alerts", href: "/alerts", key: "alerts" },
-  { icon: "📊", label: "Analytics", href: "#", key: "analytics" },
-];
-
 export default function Dashboard() {
   const router = useRouter();
-  const { isLoaded, isSignedIn, getToken, signOut } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
+  const { signOut } = useClerk();
 
   const [profile, setProfile] = useState(null);
   const [comparisons, setComparisons] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingData, setLoadingData] = useState(true);
-  const [alertModal, setAlertModal] = useState({ open: false, edit: null });
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
 
-  // Auth guard
   useEffect(() => {
-    if (isLoaded && !isSignedIn) router.replace("/auth");
-  }, [isLoaded, isSignedIn, router]);
+    if (!isLoaded) return;
+    if (!isSignedIn) { router.replace("/auth"); return; }
 
-  // Fetch user profile
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    const run = async () => {
+    const load = async () => {
+      setLoading(true);
       try {
         const token = await getToken();
-        const me = await getMe(token);
-        setProfile(me);
-        if (!me.is_onboarded) router.replace("/onboarding");
-      } catch (err) {
-        if (err.status === 404) router.replace("/onboarding");
-        else setError("Could not load your profile. Please refresh.");
-      } finally {
-        setLoadingProfile(false);
-      }
-    };
-    run();
-  }, [isLoaded, isSignedIn, getToken, router]);
-
-  // Fetch comparisons + alerts
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    const run = async () => {
-      try {
-        const token = await getToken();
-        const [comps, alts] = await Promise.all([
+        const [me, comps, alts] = await Promise.all([
+          getMe(token),
           listComparisons(token, { page: 1, limit: 5 }),
           listAlerts(token),
         ]);
-        setComparisons(comps);
-        setAlerts(alts);
-      } catch (err) {
-        console.error("Dashboard data fetch failed:", err);
+        if (!me.is_onboarded) { router.replace("/onboarding"); return; }
+        setProfile(me);
+        setComparisons(comps?.items || comps || []);
+        setAlerts(alts?.items || alts || []);
+      } catch (e) {
+        setError(e.message || "Failed to load dashboard data.");
       } finally {
-        setLoadingData(false);
+        setLoading(false);
       }
     };
-    run();
-  }, [isLoaded, isSignedIn, getToken]);
+    load();
+  }, [isLoaded, isSignedIn]);
 
-  const handleToggleAlert = async (alert) => {
-    try {
-      const token = await getToken();
-      const updated = await updateAlert(token, alert.id, { is_active: !alert.is_active });
-      setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-    } catch (err) {
-      console.error("Toggle alert failed:", err);
-    }
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/");
   };
 
-  const handleAlertSaved = (saved) => {
-    setAlerts((prev) => {
-      const existing = prev.findIndex((a) => a.id === saved.id);
-      if (existing >= 0) {
-        const next = [...prev];
-        next[existing] = saved;
-        return next;
-      }
-      return [saved, ...prev];
-    });
-  };
+  const initials = user?.firstName
+    ? `${user.firstName[0]}${user.lastName?.[0] || ""}`.toUpperCase()
+    : "?";
 
-  const firstName = user?.firstName || user?.username || "there";
-  const activeCorridor = profile?.corridor_from && profile?.corridor_to
-    ? `${profile.corridor_from} → ${profile.corridor_to}`
-    : null;
+  const firstName = user?.firstName || "there";
+  const corridor = profile ? `${profile.corridor_from} → ${profile.corridor_to}` : null;
+  const activeAlerts = (alerts || []).filter(a => a.is_active !== false).slice(0, 4);
+  const totalComparisons = comparisons?.length || 0;
+  const totalAlerts = (alerts || []).length;
 
-  if (!isLoaded || loadingProfile) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
-        <div className="loading-box"><div className="spinner" />Loading your dashboard…</div>
+  if (!isLoaded || (isLoaded && !isSignedIn)) return null;
+
+  const Sidebar = () => (
+    <aside className={`db-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+      <div className="sidebar-logo-wrap">
+        <Link href="/" className="logo sidebar-logo">
+          <span className="logo-mark">V</span>
+          <span>Vaulto</span>
+        </Link>
+        <span className="sidebar-tier">Elite Tier</span>
       </div>
-    );
-  }
+
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map(item => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`sidebar-link ${router.pathname === item.href.split("?")[0] ? "sidebar-link-active" : ""}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <span className="sidebar-icon">{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="sidebar-bottom">
+        <div className="sidebar-user">
+          <div className="sb-avatar">{initials}</div>
+          <div className="sb-user-info">
+            <div className="sb-name">{user?.fullName || firstName}</div>
+            <div className="sb-verified">Verified ✓</div>
+          </div>
+        </div>
+        <button className="btn-ghost-sm sidebar-logout" onClick={handleSignOut} id="dashboard-logout">
+          Logout
+        </button>
+      </div>
+    </aside>
+  );
 
   return (
     <>
       <Head>
-        <title>Dashboard — Vaulto | Elite Financial Dashboard</title>
-        <meta name="description" content="Your Vaulto dashboard. Compare rates, manage alerts, and track your transfer history." />
+        <title>Dashboard — Vaulto</title>
+        <meta name="description" content="Your Vaulto dashboard — compare rates, track alerts, and view transfer history." />
       </Head>
 
-      <div className="dash-root">
-        {/* ── Sidebar ── */}
-        <aside className={`dash-sidebar ${sidebarOpen ? "open" : ""}`}>
-          {/* Brand */}
-          <div style={{ padding: "1.5rem 1.25rem 2rem" }}>
-            <Link href="/" className="logo" style={{ fontSize: "1.2rem" }}>
-              <span className="logo-mark" style={{ width: "26px", height: "26px", fontSize: "0.75rem" }}>V</span>
-              Vaulto
-            </Link>
-            <div style={{ marginTop: "0.4rem" }}>
-              <span className="pill pill-secondary" style={{ fontSize: "0.6rem" }}>Elite Tier</span>
-            </div>
-          </div>
+      <div className="db-layout">
+        <Sidebar />
 
-          {/* Nav items */}
-          <nav style={{ padding: "0 0.75rem", flex: 1 }}>
-            {NAV_ITEMS.map(item => (
-              <a
-                key={item.key}
-                href={item.href}
-                className={`dash-nav-item ${router.pathname.includes(item.key) ? "active" : ""}`}
-                aria-current={router.pathname.includes(item.key) ? "page" : undefined}
-              >
-                <span style={{ fontSize: "1rem", width: "20px", textAlign: "center" }}>{item.icon}</span>
-                {item.label}
-              </a>
-            ))}
-          </nav>
+        {/* Mobile overlay */}
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-          {/* User section */}
-          <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid rgba(11,18,32,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-              <div style={{ width: "36px", height: "36px", background: "linear-gradient(135deg, var(--primary), var(--secondary))", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "white", fontFamily: "var(--font-display)", flexShrink: 0 }}>
-                {firstName[0]?.toUpperCase()}
-              </div>
-              <div style={{ overflow: "hidden" }}>
-                <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem", color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{firstName}</div>
-                <div style={{ fontSize: "0.7rem", color: "var(--muted)" }}>Verified ✓</div>
-              </div>
-            </div>
-            <button
-              className="dash-nav-item"
-              onClick={() => signOut()}
-              style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "var(--muted)", textAlign: "left" }}
-            >
-              <span style={{ fontSize: "1rem", width: "20px", textAlign: "center" }}>↩</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Main content ── */}
-        <div className="dash-main-area">
+        <main className="db-main">
           {/* Mobile header */}
-          <div className="dash-mobile-header">
-            <button onClick={() => setSidebarOpen(o => !o)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.3rem", color: "var(--text)" }} aria-label="Menu">
-              ☰
+          <div className="db-mobile-header">
+            <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menu">
+              <span className="ham-line" /><span className="ham-line" /><span className="ham-line" />
             </button>
             <Link href="/" className="logo" style={{ fontSize: "1.1rem" }}>
-              <span className="logo-mark" style={{ width: "24px", height: "24px", fontSize: "0.7rem" }}>V</span>Vaulto
+              <span className="logo-mark" style={{ width: 22, height: 22, fontSize: "0.7rem" }}>V</span>
+              <span>Vaulto</span>
             </Link>
-            <Link href="/alerts" style={{ fontSize: "1.1rem", textDecoration: "none" }}>🔔</Link>
           </div>
 
-          <div className="dash-content">
-            {error && <div className="error-box" style={{ marginBottom: "1.5rem" }}>⚠ {error}</div>}
+          <div className="db-content">
+            {error && (
+              <div className="error-box" style={{ marginBottom: "1.5rem" }}>
+                ⚠️ {error}
+                <button onClick={() => setError("")} style={{ marginLeft: "1rem", background: "none", border: "none", cursor: "pointer", color: "inherit", textDecoration: "underline" }}>Dismiss</button>
+              </div>
+            )}
 
-            {/* ── Greeting ── */}
-            <div style={{ marginBottom: "2.5rem" }}>
-              <div className="label-sm" style={{ marginBottom: "0.4rem" }}>Overview</div>
-              <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.6rem, 3vw, 2rem)", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: "0.35rem" }}>
-                {greeting()}, {firstName}.
+            {/* Header */}
+            <div className="db-header">
+              <p className="label-sm">Overview</p>
+              <h1 className="display-md" style={{ margin: "0.25rem 0 0.5rem" }}>
+                {getGreeting()}, {firstName}.
               </h1>
-              <p style={{ color: "var(--text-mid)", fontSize: "0.95rem" }}>
-                {activeCorridor
-                  ? `Your main corridor: ${activeCorridor}. Let's find you the best rate today.`
-                  : "Compare rates across all major providers and save on every transfer."}
-              </p>
+              {corridor && (
+                <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                  Your active corridor: <strong style={{ color: "var(--text-mid)" }}>{corridor}</strong>
+                </p>
+              )}
             </div>
 
-            {/* ── Smart Insight Card ── */}
-            {activeCorridor && (
-              <div style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dim) 60%, #1e3460 100%)", borderRadius: "var(--radius-xl)", padding: "2rem", marginBottom: "1.5rem", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "140px", height: "140px", background: "var(--secondary)", borderRadius: "50%", opacity: 0.12 }} />
-                <div style={{ position: "absolute", bottom: "-30px", right: "80px", width: "100px", height: "100px", background: "var(--tertiary)", borderRadius: "50%", opacity: 0.08 }} />
-
-                <div className="label-sm" style={{ color: "rgba(255,255,255,0.45)", marginBottom: "0.5rem" }}>
-                  Smart Insight — {activeCorridor}
+            {/* Smart Insight Card */}
+            {profile?.corridor_from && (
+              <div className="smart-card anim-fade-up">
+                <div>
+                  <p className="label-sm" style={{ color: "rgba(255,255,255,0.5)", marginBottom: "0.5rem" }}>
+                    Smart Insight — {corridor}
+                  </p>
+                  <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.3rem", color: "white", marginBottom: "0.5rem" }}>
+                    Your corridor is active
+                  </h2>
+                  <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.875rem", maxWidth: "480px" }}>
+                    Live rates are available for your {corridor} corridor. Compare now to find the best provider for your next transfer.
+                  </p>
                 </div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", fontWeight: 700, color: "white", marginBottom: "0.4rem" }}>
-                  Your corridor is active
-                </div>
-                <p style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.6)", maxWidth: "420px", lineHeight: 1.65 }}>
-                  Real-time rates are available for your {activeCorridor} corridor. Compare now to find today's best provider.
-                </p>
                 <Link
                   href={`/results?from=${profile.corridor_from}&to=${profile.corridor_to}&amount=1000`}
                   className="btn-secondary"
-                  style={{ display: "inline-flex", marginTop: "1.25rem", textDecoration: "none", padding: "0.65rem 1.25rem", fontSize: "0.875rem" }}
+                  style={{ flexShrink: 0, alignSelf: "flex-start" }}
+                  id="dashboard-compare-now"
                 >
                   Compare now →
                 </Link>
               </div>
             )}
 
-            {/* ── Grid layout ── */}
-            <div className="dash-grid">
-              {/* Compare widget */}
-              <div className="card" style={{ gridColumn: "1 / -1" }}>
-                <div className="label-sm" style={{ marginBottom: "1rem" }}>Quick compare</div>
-                <CompareWidget
-                  defaultFrom={profile?.corridor_from || "GBP"}
-                  defaultTo={profile?.corridor_to || "INR"}
-                  defaultAmount={1000}
-                />
-              </div>
+            {/* Quick Compare Widget */}
+            <div className="card anim-fade-up anim-delay-1" style={{ marginBottom: "1.5rem" }}>
+              <p className="label-sm" style={{ marginBottom: "1rem" }}>Quick Compare</p>
+              <CompareWidget
+                defaultFrom={profile?.corridor_from || "GBP"}
+                defaultTo={profile?.corridor_to || "INR"}
+                defaultAmount={1000}
+              />
+            </div>
 
-              {/* Recent activity */}
+            {/* 2-col grid */}
+            <div className="db-grid anim-fade-up anim-delay-2">
+              {/* Recent Transfers */}
               <div className="card">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
-                  <div className="label-sm">Recent Transfers</div>
-                  <Link href="/history" style={{ color: "var(--secondary)", fontSize: "0.8rem", textDecoration: "none", fontWeight: 600 }}>
-                    View all →
-                  </Link>
+                <div className="card-section-header">
+                  <p className="label-sm">Recent Transfers</p>
+                  <Link href="/history" style={{ fontSize: "0.8rem", color: "var(--secondary)", textDecoration: "none", fontWeight: 600 }}>View all →</Link>
                 </div>
-
-                {loadingData ? (
-                  <Skeleton lines={4} />
-                ) : comparisons.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "2rem 0" }}>
-                    <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔍</div>
-                    <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>No transfers yet.<br />Start comparing above!</p>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-                    {comparisons.map((c, i) => {
-                      let bestProvider = "—";
-                      try {
-                        const results = JSON.parse(c.results_json);
-                        if (results?.length > 0) bestProvider = results[0].provider;
-                      } catch (_) {}
+                {loading ? (
+                  [1,2,3].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
+                ) : comparisons.length > 0 ? (
+                  <div className="recent-list">
+                    {comparisons.slice(0, 5).map((c, i) => {
+                      let best = "—";
+                      try { const r = JSON.parse(c.results_json || "[]"); best = r[0]?.provider || "—"; } catch {}
                       return (
-                        <a
-                          key={c.id}
-                          href={`/results?from=${c.from_currency}&to=${c.to_currency}&amount=${c.amount}`}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.9rem 0", textDecoration: "none", borderBottom: i < comparisons.length - 1 ? "1px solid var(--surface-high)" : "none", transition: "opacity 0.15s" }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
-                          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                        >
+                        <div key={i} className="recent-item">
                           <div>
-                            <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.9rem", color: "var(--text)", marginBottom: "0.1rem" }}>
-                              {c.from_currency} → {c.to_currency}
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{fmtDate(c.created_at)}</div>
+                            <div className="recent-corridor">{c.from_currency} → {c.to_currency}</div>
+                            <div className="recent-meta">{new Date(c.created_at).toLocaleDateString()} · {best}</div>
                           </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: "0.8rem", color: "var(--text-mid)", fontWeight: 600 }}>{bestProvider}</div>
-                            <div style={{ fontSize: "0.72rem", color: "var(--tertiary)" }}>Best price</div>
-                          </div>
-                        </a>
+                          <Link href={`/results?from=${c.from_currency}&to=${c.to_currency}&amount=${c.amount}`} className="recent-rerun">
+                            Re-run →
+                          </Link>
+                        </div>
                       );
                     })}
                   </div>
+                ) : (
+                  <div className="empty-state-sm">
+                    <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>🔍</div>
+                    <p>No comparisons yet</p>
+                    <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary" style={{ marginTop: "0.75rem", fontSize: "0.85rem", padding: "0.5rem 1rem" }}>
+                      Start comparing →
+                    </Link>
+                  </div>
                 )}
               </div>
 
-              {/* Rate alerts */}
+              {/* Rate Alerts */}
               <div className="card">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
-                  <div className="label-sm">Rate Alerts</div>
-                  <Link href="/alerts" style={{ color: "var(--secondary)", fontSize: "0.8rem", textDecoration: "none", fontWeight: 600 }}>
-                    Manage →
-                  </Link>
+                <div className="card-section-header">
+                  <p className="label-sm">Rate Alerts</p>
+                  <Link href="/alerts" style={{ fontSize: "0.8rem", color: "var(--secondary)", textDecoration: "none", fontWeight: 600 }}>Manage →</Link>
                 </div>
-
-                {loadingData ? (
-                  <Skeleton lines={3} />
-                ) : alerts.filter(a => a.is_active).length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "1.5rem 0 0.5rem" }}>
-                    <div style={{ fontSize: "1.75rem", marginBottom: "0.5rem" }}>🔔</div>
-                    <p style={{ color: "var(--muted)", fontSize: "0.875rem", marginBottom: "1rem" }}>No active alerts yet.</p>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-                    {alerts.filter(a => a.is_active).slice(0, 4).map((a, i) => (
-                      <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 0", borderBottom: i < Math.min(alerts.filter(x => x.is_active).length, 4) - 1 ? "1px solid var(--surface-high)" : "none" }}>
+                {loading ? (
+                  [1,2].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
+                ) : activeAlerts.length > 0 ? (
+                  <div className="alerts-list">
+                    {activeAlerts.map(a => (
+                      <div key={a.id} className="alert-item">
                         <div>
-                          <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.875rem", color: "var(--text)" }}>
-                            {a.from_currency} → {a.to_currency}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>Target: {a.target_rate}</div>
+                          <div className="alert-corridor">{a.from_currency} → {a.to_currency}</div>
+                          <div className="alert-meta">Target: {a.target_rate} · {a.amount} {a.from_currency}</div>
                         </div>
-                        <button
-                          onClick={() => handleToggleAlert(a)}
-                          style={{ background: "var(--surface-high)", border: "none", borderRadius: "var(--radius-full)", padding: "0.25rem 0.6rem", fontSize: "0.72rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}
-                          title="Pause alert"
-                        >
-                          Pause
-                        </button>
+                        <span className="pill pill-tertiary" style={{ fontSize: "0.65rem" }}>● Active</span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="empty-state-sm">
+                    <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>🔔</div>
+                    <p>No active alerts</p>
+                  </div>
                 )}
-
                 <button
-                  className="btn-primary"
-                  style={{ width: "100%", marginTop: "1rem", padding: "0.65rem", fontSize: "0.875rem", justifyContent: "center" }}
-                  onClick={() => setAlertModal({ open: true, edit: null })}
+                  className="btn-secondary"
+                  style={{ width: "100%", justifyContent: "center", marginTop: "1rem", fontSize: "0.875rem" }}
+                  onClick={() => setAlertModalOpen(true)}
+                  id="dashboard-new-alert"
                 >
                   + New Alert
                 </button>
               </div>
             </div>
+
+            {/* Stats row */}
+            <div className="db-stats anim-fade-up anim-delay-3">
+              <div className="stat-mini">
+                <div className="stat-mini-value">{loading ? "—" : totalComparisons}</div>
+                <div className="label-sm">Saved comparisons</div>
+              </div>
+              <div className="stat-mini">
+                <div className="stat-mini-value">{loading ? "—" : totalAlerts}</div>
+                <div className="label-sm">Active alerts</div>
+              </div>
+              <div className="stat-mini">
+                <div className="stat-mini-value" style={{ fontSize: "1.1rem" }}>{loading ? "—" : (corridor || "—")}</div>
+                <div className="label-sm">Your corridor</div>
+              </div>
+            </div>
           </div>
-        </div>
+        </main>
       </div>
 
       <AlertModal
-        isOpen={alertModal.open}
-        onClose={() => setAlertModal({ open: false, edit: null })}
-        onSuccess={handleAlertSaved}
+        isOpen={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        onSuccess={(newAlert) => {
+          setAlerts(prev => [newAlert, ...prev]);
+          setAlertModalOpen(false);
+        }}
         defaultFrom={profile?.corridor_from || "GBP"}
         defaultTo={profile?.corridor_to || "INR"}
         defaultAmount={1000}
-        editAlert={alertModal.edit}
-        userWhatsapp={profile?.whatsapp_number || null}
+        userWhatsapp={profile?.whatsapp_number}
       />
 
       <style jsx>{`
-        .dash-root {
+        .db-layout {
           display: flex;
           min-height: 100vh;
           background: var(--bg);
         }
 
-        .dash-sidebar {
+        .db-sidebar {
           width: 240px;
-          flex-shrink: 0;
-          background: var(--surface-float);
-          box-shadow: var(--shadow-md);
+          min-height: 100vh;
+          background: var(--primary);
           display: flex;
           flex-direction: column;
-          position: fixed;
+          position: sticky;
           top: 0;
-          left: 0;
           height: 100vh;
+          overflow-y: auto;
+          flex-shrink: 0;
           z-index: 50;
-          transition: transform 0.25s ease;
+        }
+        @media (max-width: 900px) {
+          .db-sidebar {
+            position: fixed;
+            left: -260px;
+            transition: left 0.3s ease;
+            box-shadow: none;
+          }
+          .sidebar-open { left: 0 !important; box-shadow: var(--shadow-lg); }
         }
 
-        .dash-main-area {
+        .sidebar-overlay {
+          position: fixed; inset: 0; z-index: 40;
+          background: rgba(0,0,0,0.5);
+        }
+
+        .sidebar-logo-wrap {
+          padding: 1.5rem;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          display: flex; align-items: center; gap: 0.75rem;
+        }
+        .sidebar-logo { color: white !important; font-size: 1.2rem; }
+        .sidebar-tier {
+          font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+          background: var(--secondary); color: white;
+          padding: 0.15rem 0.5rem; border-radius: var(--radius-full);
+          text-transform: uppercase;
+        }
+
+        .sidebar-nav {
           flex: 1;
-          margin-left: 240px;
-          display: flex;
-          flex-direction: column;
+          padding: 1rem 0.75rem;
+          display: flex; flex-direction: column; gap: 0.25rem;
         }
-
-        .dash-mobile-header {
-          display: none;
-        }
-
-        .dash-content {
-          padding: 2.5rem 2rem 4rem;
-          max-width: 1000px;
-        }
-
-        .dash-nav-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.7rem 0.75rem;
+        .sidebar-link {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 0.7rem 0.85rem;
           border-radius: var(--radius-md);
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: var(--text-mid);
+          font-size: 0.9rem; font-weight: 500;
+          color: rgba(255,255,255,0.65);
           text-decoration: none;
           transition: background 0.15s, color 0.15s;
-          margin-bottom: 0.15rem;
-          font-family: var(--font-body);
         }
+        .sidebar-link:hover { background: rgba(255,255,255,0.06); color: white; }
+        .sidebar-link-active { background: rgba(255,255,255,0.1) !important; color: white !important; }
+        .sidebar-icon { font-size: 1rem; width: 20px; text-align: center; }
 
-        .dash-nav-item:hover {
-          background: var(--surface-low);
-          color: var(--text);
+        .sidebar-bottom {
+          padding: 1rem 0.75rem 1.5rem;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          display: flex; flex-direction: column; gap: 0.75rem;
         }
-
-        .dash-nav-item.active {
-          background: var(--secondary-dim);
-          color: var(--secondary);
-          font-weight: 700;
+        .sidebar-user { display: flex; align-items: center; gap: 0.75rem; }
+        .sb-avatar {
+          width: 36px; height: 36px; border-radius: 50%;
+          background: linear-gradient(135deg, var(--secondary), var(--tertiary));
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--font-display); font-weight: 800; font-size: 0.8rem; color: white;
+          flex-shrink: 0;
         }
+        .sb-name { font-size: 0.875rem; font-weight: 600; color: rgba(255,255,255,0.9); }
+        .sb-verified { font-size: 0.7rem; color: var(--tertiary); }
+        .sidebar-logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); width: 100%; justify-content: center; }
+        .sidebar-logout:hover { color: white; border-color: rgba(255,255,255,0.3); }
 
-        .dash-grid {
+        .db-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .db-mobile-header {
+          display: none;
+          align-items: center; gap: 1rem;
+          padding: 1rem 1.5rem;
+          background: var(--surface-float);
+          border-bottom: 1px solid var(--surface-high);
+          position: sticky; top: 0; z-index: 30;
+        }
+        @media (max-width: 900px) { .db-mobile-header { display: flex; } }
+        .hamburger { display: flex; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
+        .ham-line { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; }
+
+        .db-content { padding: 2rem 2.5rem; max-width: 1000px; }
+        @media (max-width: 900px) { .db-content { padding: 1.5rem; } }
+
+        .db-header { margin-bottom: 2rem; }
+
+        .smart-card {
+          background: linear-gradient(135deg, var(--primary) 0%, #1e3460 100%);
+          border-radius: var(--radius-xl);
+          padding: 2rem;
+          display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 1.5rem;
+          margin-bottom: 1.5rem;
+          position: relative; overflow: hidden;
+        }
+        .smart-card::before {
+          content: "";
+          position: absolute; top: -40px; right: -40px;
+          width: 180px; height: 180px;
+          background: radial-gradient(circle, rgba(0,88,190,0.2), transparent 70%);
+          border-radius: 50%;
+        }
+        @media (max-width: 600px) { .smart-card { flex-direction: column; } }
+
+        .db-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 1.25rem;
+          margin-bottom: 1.5rem;
         }
+        @media (max-width: 700px) { .db-grid { grid-template-columns: 1fr; } }
 
-        @media (max-width: 900px) {
-          .dash-sidebar {
-            transform: translateX(-100%);
-          }
-          .dash-sidebar.open {
-            transform: translateX(0);
-          }
-          .dash-main-area {
-            margin-left: 0;
-          }
-          .dash-mobile-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            background: var(--surface-float);
-            box-shadow: var(--shadow-sm);
-            position: sticky;
-            top: 0;
-            z-index: 40;
-          }
-          .dash-content {
-            padding: 1.5rem 1.25rem 3rem;
-          }
+        .card-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+        .recent-list { display: flex; flex-direction: column; gap: 0; }
+        .recent-item {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0.75rem 0;
+          border-bottom: 1px solid var(--surface-high);
         }
+        .recent-item:last-child { border-bottom: none; }
+        .recent-corridor { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; color: var(--text); }
+        .recent-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+        .recent-rerun { font-size: 0.8rem; color: var(--secondary); text-decoration: none; font-weight: 600; }
+        .recent-rerun:hover { text-decoration: underline; }
 
-        @media (max-width: 680px) {
-          .dash-grid {
-            grid-template-columns: 1fr;
-          }
+        .alerts-list { display: flex; flex-direction: column; gap: 0; }
+        .alert-item {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0.75rem 0;
+          border-bottom: 1px solid var(--surface-high);
+        }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-corridor { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
+        .alert-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+
+        .empty-state-sm { text-align: center; padding: 1.5rem 0; color: var(--muted); font-size: 0.875rem; }
+        .empty-state-sm p { margin-bottom: 0.25rem; }
+
+        .db-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
+        }
+        @media (max-width: 600px) { .db-stats { grid-template-columns: 1fr; } }
+        .stat-mini {
+          background: var(--surface-float);
+          border-radius: var(--radius-md);
+          padding: 1.25rem;
+          box-shadow: var(--shadow-sm);
+          text-align: center;
+        }
+        .stat-mini-value {
+          font-family: var(--font-display);
+          font-size: 1.8rem; font-weight: 800;
+          letter-spacing: -0.03em;
+          color: var(--text);
+          margin-bottom: 0.25rem;
         }
       `}</style>
     </>

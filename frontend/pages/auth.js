@@ -1,469 +1,408 @@
 import { useState, useEffect } from "react";
-import Head from "next/head";
 import { useRouter } from "next/router";
-import { useSignIn, useSignUp, useUser } from "@clerk/nextjs";
+import { useSignIn, useSignUp, useAuth } from "@clerk/nextjs";
+import Head from "next/head";
+import Link from "next/link";
 
-const GoogleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-  </svg>
-);
+const MODE_LOGIN = "login";
+const MODE_SIGNUP = "signup";
+const MODE_FORGOT = "forgot";
 
-const BRAND_STATS = [
-  { value: "50K+", label: "New users/month" },
-  { value: "3+", label: "Providers compared" },
-  { value: "5%", label: "Avg. savings" },
-];
+function getPasswordStrength(pw) {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return score;
+}
 
-export default function AuthPage() {
+export default function Auth() {
   const router = useRouter();
-  const { isLoaded: isSessionLoaded, isSignedIn } = useUser();
-  const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
-  const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { isLoaded: signInLoaded, signIn, setActive: setSignInActive } = useSignIn();
+  const { isLoaded: signUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
 
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState(MODE_LOGIN);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
 
-  // Read ?mode=sign-up from URL
   useEffect(() => {
-    if (router.query.mode === "sign-up") setMode("signup");
+    if (router.query.mode === "signup") setMode(MODE_SIGNUP);
   }, [router.query.mode]);
 
   useEffect(() => {
-    if (isSessionLoaded && isSignedIn) router.push("/");
-  }, [isSessionLoaded, isSignedIn, router]);
+    if (authLoaded && isSignedIn) router.replace("/dashboard");
+  }, [authLoaded, isSignedIn]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const passwordStrength = getPasswordStrength(password);
+  const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
+  const strengthColors = ["", "#ef4444", "#f59e0b", "#3b82f6", "#10b981"];
+
+  const handleGoogleAuth = async () => {
     setError("");
-    if (!email.trim()) return setError("Please enter your email address");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setError("Please enter a valid email address");
-
-    if (mode === "forgot") {
-      setLoading(true);
-      try {
-        if (!isSignInLoaded) return;
-        await signIn.create({ strategy: "reset_password_email_code", identifier: email });
-        setForgotSent(true);
-      } catch (err) {
-        setError(err.errors?.[0]?.longMessage || err.message || "Failed to initiate reset.");
-      }
-      setLoading(false);
-      return;
+    try {
+      const method = mode === MODE_SIGNUP ? signUp : signIn;
+      await method.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: "/sso-callback",
+        redirectUrlComplete: "/post-auth",
+      });
+    } catch (e) {
+      setError(e.errors?.[0]?.message || "Google sign-in failed.");
     }
+  };
 
-    if (!password) return setError("Please enter your password");
-    if (mode === "signup" && password.length < 8) return setError("Password must be at least 8 characters");
-    if (mode === "signup" && !name.trim()) return setError("Please enter your name");
-
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!signInLoaded) return;
+    setError("");
     setLoading(true);
     try {
-      if (mode === "signup") {
-        if (!isSignUpLoaded) return;
-        const result = await signUp.create({
-          firstName: name.split(" ")[0],
-          lastName: name.split(" ").slice(1).join(" "),
-          emailAddress: email,
-          password,
-        });
-        if (result.status === "complete") {
-          await setSignUpActive({ session: result.createdSessionId });
-          router.push("/post-auth");
-        } else {
-          setError("Verification required — please check your Clerk Dashboard settings.");
-        }
+      const result = await signIn.create({ identifier: email, password });
+      if (result.status === "complete") {
+        await setSignInActive({ session: result.createdSessionId });
+        router.push("/post-auth");
       } else {
-        if (!isSignInLoaded) return;
-        const result = await signIn.create({ identifier: email, password });
-        if (result.status === "complete") {
-          await setSignInActive({ session: result.createdSessionId });
-          router.push("/post-auth");
-        }
+        setError("Additional verification required. Please check your email.");
       }
-    } catch (err) {
-      console.error(err);
-      setError(err.errors?.[0]?.longMessage || err.message || "An authentication error occurred.");
+    } catch (e) {
+      setError(e.errors?.[0]?.longMessage || e.errors?.[0]?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleAuth = async (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
+    if (!signUpLoaded) return;
+    setError("");
     setLoading(true);
     try {
-      const opts = { strategy: "oauth_google", redirectUrl: "/sso-callback", redirectUrlComplete: "/post-auth" };
-      if (mode === "login" && isSignInLoaded) await signIn.authenticateWithRedirect(opts);
-      else if (mode === "signup" && isSignUpLoaded) await signUp.authenticateWithRedirect(opts);
-      else setLoading(false);
-    } catch (err) {
-      console.error(err);
+      const parts = name.trim().split(" ");
+      const firstName = parts[0] || "";
+      const lastName = parts.slice(1).join(" ") || "";
+      const result = await signUp.create({ emailAddress: email, password, firstName, lastName });
+      if (result.status === "complete") {
+        await setSignUpActive({ session: result.createdSessionId });
+        router.push("/post-auth");
+      } else {
+        setError("Verification required. Check your email to continue.");
+      }
+    } catch (e) {
+      setError(e.errors?.[0]?.longMessage || e.errors?.[0]?.message || "Sign up failed.");
+    } finally {
       setLoading(false);
     }
   };
 
-  const switchMode = (m) => { setMode(m); setError(""); setForgotSent(false); };
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    if (!signInLoaded || !email) return;
+    setError("");
+    setLoading(true);
+    try {
+      await signIn.create({ strategy: "reset_password_email_code", identifier: email });
+      setForgotSent(true);
+    } catch (e) {
+      setError(e.errors?.[0]?.message || "Failed to send reset email.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
       <Head>
-        <title>{mode === "signup" ? "Join Vaulto" : mode === "forgot" ? "Reset Password" : "Log In to Vaulto"} — Elite Access</title>
-        <meta name="description" content="Sign in to Vaulto and access your elite financial dashboard." />
+        <title>{mode === MODE_SIGNUP ? "Create Account" : "Log In"} — Vaulto</title>
+        <meta name="description" content="Sign in or create your free Vaulto account to save comparisons and set rate alerts." />
       </Head>
 
-      <div className="auth-root">
-        {/* ── Left brand panel ── */}
-        <div className="auth-brand">
-          {/* Decorative orbs */}
-          <div className="auth-orb auth-orb-1" />
-          <div className="auth-orb auth-orb-2" />
-          <div className="auth-orb auth-orb-3" />
-
-          <div className="auth-brand-inner">
-            {/* Logo */}
-            <a href="/" className="logo" style={{ color: "white" }}>
-              <span className="logo-mark" style={{ background: "rgba(255,255,255,0.12)" }}>V</span>
-              Vaulto
-            </a>
-
-            {/* Headline */}
-            <div style={{ marginTop: "auto", paddingBottom: "3rem" }}>
-              <div className="label-sm" style={{ color: "rgba(255,255,255,0.4)", marginBottom: "1rem" }}>
-                The Kinetic Vault
-              </div>
-              <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2rem, 3.5vw, 2.75rem)", fontWeight: 800, color: "white", letterSpacing: "-0.04em", lineHeight: 1.06, marginBottom: "1.25rem" }}>
-                Your money,<br />moving faster<br />than ever.
-              </h1>
-              <p style={{ fontSize: "0.975rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.7, maxWidth: "340px" }}>
-                Experience the fluidity of global finance. Vaulto combines high-security vaulting with the speed of elite trading floors.
-              </p>
-
-              {/* Stats */}
-              <div style={{ display: "flex", gap: "2rem", marginTop: "3rem" }}>
-                {BRAND_STATS.map(s => (
-                  <div key={s.value}>
-                    <div style={{ fontFamily: "var(--font-display)", fontSize: "1.6rem", fontWeight: 800, color: "white", letterSpacing: "-0.03em" }}>{s.value}</div>
-                    <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", marginTop: "0.15rem" }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Trust badges */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "3rem" }}>
-                {[
-                  "Real-time rate comparison across 3+ regulated providers",
-                  "Smart WhatsApp alerts when rates improve",
-                  "Save up to 5% on every international transfer",
-                ].map(t => (
-                  <div key={t} style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.8rem", color: "rgba(255,255,255,0.5)" }}>
-                    <span style={{ width: "16px", height: "16px", background: "rgba(16,185,129,0.25)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.6rem", color: "var(--tertiary)", flexShrink: 0 }}>✓</span>
-                    {t}
-                  </div>
-                ))}
-              </div>
+      <div className="auth-layout">
+        {/* Left brand panel */}
+        <div className="auth-left">
+          <div className="auth-left-orb orb1" />
+          <div className="auth-left-orb orb2" />
+          <div className="auth-left-content">
+            <Link href="/" className="logo auth-logo">
+              <span className="logo-mark">V</span>
+              <span>Vaulto</span>
+            </Link>
+            <h2 className="auth-brand-h2">
+              Your money, moving<br />faster than ever.
+            </h2>
+            <div className="auth-stats">
+              {[
+                { value: "50K+", label: "Users this month" },
+                { value: "3+", label: "Providers compared" },
+                { value: "5%", label: "Avg savings" },
+              ].map(s => (
+                <div key={s.label} className="auth-stat">
+                  <div className="auth-stat-val">{s.value}</div>
+                  <div className="auth-stat-label">{s.label}</div>
+                </div>
+              ))}
             </div>
+            <ul className="auth-bullets">
+              {["Real-time rates from top providers", "Save comparisons & track history", "WhatsApp rate alerts — free"].map(b => (
+                <li key={b} className="auth-bullet">
+                  <span className="auth-bullet-icon">✓</span>
+                  {b}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
-        {/* ── Right: form panel ── */}
-        <div className="auth-form-panel">
-          {/* Mobile logo */}
-          <div className="auth-mobile-logo">
-            <a href="/" className="logo" style={{ fontSize: "1.1rem" }}>
-              <span className="logo-mark" style={{ width: "26px", height: "26px", fontSize: "0.75rem" }}>V</span>
-              Vaulto
-            </a>
-          </div>
-
-          <div className="auth-form-inner">
-            {/* ─── Login ─── */}
-            {mode === "login" && (
-              <div key="login" className="anim-fade-up">
-                <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.75rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: "0.4rem" }}>
-                  Welcome Back
-                </h2>
-                <p style={{ color: "var(--text-mid)", fontSize: "0.9rem", marginBottom: "2rem" }}>
-                  Access your elite financial dashboard.
-                </p>
-
-                {/* Google */}
-                <button type="button" onClick={handleGoogleAuth} disabled={loading} id="auth-google" className="auth-google-btn">
-                  <GoogleIcon />
-                  Continue with Google
+        {/* Right form panel */}
+        <div className="auth-right">
+          <div className="auth-form-wrap">
+            {/* Mode tabs */}
+            <div className="auth-tabs">
+              {[
+                { key: MODE_LOGIN, label: "Log In" },
+                { key: MODE_SIGNUP, label: "Sign Up" },
+                { key: MODE_FORGOT, label: "Forgot Password" },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  className={`auth-tab ${mode === t.key ? "auth-tab-active" : ""}`}
+                  onClick={() => { setMode(t.key); setError(""); setForgotSent(false); }}
+                  id={`auth-tab-${t.key}`}
+                >
+                  {t.label}
                 </button>
-
-                <div className="auth-divider"><span>or</span></div>
-
-                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  <div className="auth-field">
-                    <label htmlFor="auth-email">Email address</label>
-                    <input id="auth-email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} placeholder="you@example.com" autoComplete="email" />
-                  </div>
-                  <div className="auth-field">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <label htmlFor="auth-password">Password</label>
-                      <button type="button" onClick={() => switchMode("forgot")} style={{ fontSize: "0.75rem", color: "var(--secondary)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                        Forgot password?
-                      </button>
-                    </div>
-                    <div style={{ position: "relative" }}>
-                      <input id="auth-password" type={showPw ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="Your password" autoComplete="current-password" style={{ paddingRight: "2.75rem" }} />
-                      <button type="button" onClick={() => setShowPw(s => !s)} tabIndex={-1} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "1rem" }}>
-                        {showPw ? "🙈" : "👁"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {error && <div className="error-box" style={{ margin: 0 }}>⚠ {error}</div>}
-
-                  <button type="submit" disabled={loading} id="auth-login-submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "0.85rem", fontSize: "0.95rem" }}>
-                    {loading ? <div className="spinner" style={{ margin: 0, width: "20px", height: "20px" }} /> : "Sign In →"}
-                  </button>
-                </form>
-
-                <p style={{ textAlign: "center", fontSize: "0.875rem", color: "var(--text-mid)", marginTop: "1.5rem" }}>
-                  Don't have an account?{" "}
-                  <button onClick={() => switchMode("signup")} style={{ color: "var(--secondary)", background: "none", border: "none", cursor: "pointer", fontWeight: 700, fontSize: "0.875rem" }}>
-                    Sign Up
-                  </button>
-                </p>
-              </div>
-            )}
-
-            {/* ─── Sign Up ─── */}
-            {mode === "signup" && (
-              <div key="signup" className="anim-fade-up">
-                <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.75rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: "0.4rem" }}>
-                  Join Vaulto
-                </h2>
-                <p style={{ color: "var(--text-mid)", fontSize: "0.9rem", marginBottom: "2rem" }}>
-                  Create your account and start saving on every transfer.
-                </p>
-
-                <button type="button" onClick={handleGoogleAuth} disabled={loading} id="signup-google" className="auth-google-btn">
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-
-                <div className="auth-divider"><span>or</span></div>
-
-                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  <div className="auth-field">
-                    <label htmlFor="signup-name">Full name</label>
-                    <input id="signup-name" type="text" value={name} onChange={e => { setName(e.target.value); setError(""); }} placeholder="John Doe" autoComplete="name" autoFocus />
-                  </div>
-                  <div className="auth-field">
-                    <label htmlFor="signup-email">Email address</label>
-                    <input id="signup-email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} placeholder="you@example.com" autoComplete="email" />
-                  </div>
-                  <div className="auth-field">
-                    <label htmlFor="signup-password">Password</label>
-                    <div style={{ position: "relative" }}>
-                      <input id="signup-password" type={showPw ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="Min. 8 characters" autoComplete="new-password" style={{ paddingRight: "2.75rem" }} />
-                      <button type="button" onClick={() => setShowPw(s => !s)} tabIndex={-1} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "1rem" }}>
-                        {showPw ? "🙈" : "👁"}
-                      </button>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.25rem" }}>
-                      Must be at least 8 characters
-                    </div>
-                  </div>
-
-                  {error && <div className="error-box" style={{ margin: 0 }}>⚠ {error}</div>}
-
-                  <button type="submit" disabled={loading} id="auth-signup-submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "0.85rem", fontSize: "0.95rem" }}>
-                    {loading ? <div className="spinner" style={{ margin: 0, width: "20px", height: "20px" }} /> : "Create Account →"}
-                  </button>
-                </form>
-
-                <p style={{ textAlign: "center", fontSize: "0.875rem", color: "var(--text-mid)", marginTop: "1.5rem" }}>
-                  Already have an account?{" "}
-                  <button onClick={() => switchMode("login")} style={{ color: "var(--secondary)", background: "none", border: "none", cursor: "pointer", fontWeight: 700, fontSize: "0.875rem" }}>
-                    Sign in
-                  </button>
-                </p>
-              </div>
-            )}
-
-            {/* ─── Forgot Password ─── */}
-            {mode === "forgot" && (
-              <div key="forgot" className="anim-fade-up">
-                {!forgotSent ? (
-                  <>
-                    <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.75rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: "0.4rem" }}>
-                      Reset Password
-                    </h2>
-                    <p style={{ color: "var(--text-mid)", fontSize: "0.9rem", marginBottom: "2rem" }}>
-                      Enter your email and we'll send a reset link.
-                    </p>
-                    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                      <div className="auth-field">
-                        <label htmlFor="forgot-email">Email address</label>
-                        <input id="forgot-email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} placeholder="you@example.com" autoFocus />
-                      </div>
-                      {error && <div className="error-box" style={{ margin: 0 }}>⚠ {error}</div>}
-                      <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "0.85rem" }}>
-                        {loading ? <div className="spinner" style={{ margin: 0, width: "20px", height: "20px" }} /> : "Send Reset Link →"}
-                      </button>
-                    </form>
-                  </>
-                ) : (
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ width: "64px", height: "64px", background: "var(--tertiary-dim)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.75rem", margin: "0 auto 1.5rem" }}>✓</div>
-                    <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text)", marginBottom: "0.5rem" }}>Check your email</h2>
-                    <p style={{ color: "var(--text-mid)", fontSize: "0.875rem" }}>
-                      We've sent a reset link to <strong style={{ color: "var(--text)" }}>{email}</strong>
-                    </p>
-                  </div>
-                )}
-                <button onClick={() => switchMode("login")} style={{ width: "100%", textAlign: "center", color: "var(--secondary)", fontSize: "0.875rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", marginTop: "1.5rem" }}>
-                  ← Back to sign in
-                </button>
-              </div>
-            )}
-
-            {/* Footer */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginTop: "2.5rem", color: "var(--muted)", fontSize: "0.72rem" }}>
-              <span>🔒</span> Your data is encrypted and secure
+              ))}
             </div>
-            <div style={{ display: "flex", gap: "1.25rem", justifyContent: "center", marginTop: "1rem" }}>
-              {["Privacy", "Terms", "Security"].map(l => <a key={l} href="#" style={{ fontSize: "0.72rem", color: "var(--muted)", textDecoration: "none" }}>{l}</a>)}
+
+            <div className="auth-form-card">
+              {/* Google OAuth */}
+              {mode !== MODE_FORGOT && (
+                <>
+                  <button
+                    className="google-btn"
+                    onClick={handleGoogleAuth}
+                    disabled={loading}
+                    id="auth-google-btn"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                    </svg>
+                    Continue with Google
+                  </button>
+                  <div className="auth-divider"><span>or</span></div>
+                </>
+              )}
+
+              {/* Login form */}
+              {mode === MODE_LOGIN && (
+                <form onSubmit={handleLogin}>
+                  <div className="field"><label htmlFor="login-email">Email</label>
+                    <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
+                  <div className="field" style={{ marginTop: "1rem" }}><label htmlFor="login-password">Password</label>
+                    <input id="login-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></div>
+                  <div style={{ textAlign: "right", marginTop: "0.5rem" }}>
+                    <button type="button" onClick={() => setMode(MODE_FORGOT)} className="forgot-link">Forgot password?</button>
+                  </div>
+                  {error && <div className="error-box">{error}</div>}
+                  <button type="submit" className="btn-secondary" style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }} disabled={loading} id="login-submit">
+                    {loading ? "Signing in…" : "Sign in →"}
+                  </button>
+                </form>
+              )}
+
+              {/* Sign up form */}
+              {mode === MODE_SIGNUP && (
+                <form onSubmit={handleSignUp}>
+                  <div className="field"><label htmlFor="su-name">Full name</label>
+                    <input id="su-name" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Alex Johnson" required /></div>
+                  <div className="field" style={{ marginTop: "1rem" }}><label htmlFor="su-email">Email</label>
+                    <input id="su-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
+                  <div className="field" style={{ marginTop: "1rem" }}>
+                    <label htmlFor="su-password">Password</label>
+                    <input id="su-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
+                    {password && (
+                      <div className="pw-strength">
+                        <div className="pw-bars">
+                          {[1,2,3,4].map(n => (
+                            <div key={n} className="pw-bar" style={{ background: n <= passwordStrength ? strengthColors[passwordStrength] : "var(--surface-high)" }} />
+                          ))}
+                        </div>
+                        <span style={{ fontSize: "0.7rem", color: strengthColors[passwordStrength] }}>{strengthLabels[passwordStrength]}</span>
+                      </div>
+                    )}
+                  </div>
+                  {error && <div className="error-box">{error}</div>}
+                  <button type="submit" className="btn-secondary" style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }} disabled={loading} id="signup-submit">
+                    {loading ? "Creating account…" : "Create account →"}
+                  </button>
+                </form>
+              )}
+
+              {/* Forgot password */}
+              {mode === MODE_FORGOT && (
+                forgotSent ? (
+                  <div className="forgot-success">
+                    <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📬</div>
+                    <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>Check your email</h3>
+                    <p style={{ color: "var(--muted)", fontSize: "0.875rem", marginTop: "0.5rem" }}>
+                      We sent a reset link to {email}. Follow the instructions to reset your password.
+                    </p>
+                    <button className="btn-ghost" onClick={() => { setMode(MODE_LOGIN); setForgotSent(false); }} style={{ marginTop: "1rem", width: "100%", justifyContent: "center" }}>
+                      Back to login
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot}>
+                    <p style={{ color: "var(--text-mid)", fontSize: "0.875rem", marginBottom: "1rem" }}>
+                      Enter your email and we'll send you a link to reset your password.
+                    </p>
+                    <div className="field"><label htmlFor="forgot-email">Email</label>
+                      <input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
+                    {error && <div className="error-box">{error}</div>}
+                    <button type="submit" className="btn-secondary" style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }} disabled={loading} id="forgot-submit">
+                      {loading ? "Sending…" : "Send Reset Link →"}
+                    </button>
+                  </form>
+                )
+              )}
+
+              {/* Footer */}
+              <div className="auth-footer-links">
+                <span>🔒 256-bit encrypted</span>
+                <Link href="#">Privacy</Link>
+                <Link href="#">Terms</Link>
+                <Link href="#">Security</Link>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .auth-root {
+        .auth-layout {
           display: flex;
           min-height: 100vh;
         }
-
-        .auth-brand {
+        .auth-left {
           width: 45%;
-          background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dim) 50%, #1a2845 100%);
-          display: flex;
-          flex-direction: column;
+          background: var(--primary);
           position: relative;
           overflow: hidden;
-        }
-
-        .auth-brand-inner {
-          position: relative;
-          z-index: 1;
-          padding: 2.5rem;
-          flex: 1;
           display: flex;
-          flex-direction: column;
-        }
-
-        .auth-orb { position: absolute; border-radius: 50%; }
-        .auth-orb-1 { width: 350px; height: 350px; background: var(--secondary); opacity: 0.08; top: -80px; left: -80px; }
-        .auth-orb-2 { width: 250px; height: 250px; background: var(--tertiary); opacity: 0.05; bottom: 100px; right: -60px; }
-        .auth-orb-3 { width: 180px; height: 180px; background: var(--secondary); opacity: 0.06; bottom: -50px; left: 100px; }
-
-        .auth-form-panel {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 3rem 2rem;
-          background: var(--bg);
-          position: relative;
+          padding: 3rem 2.5rem;
         }
-
-        .auth-mobile-logo {
-          display: none;
+        @media (max-width: 768px) { .auth-left { display: none; } }
+        .auth-left-orb {
           position: absolute;
-          top: 1.5rem;
-          left: 1.5rem;
+          border-radius: 50%;
+          pointer-events: none;
         }
-
-        .auth-form-inner {
-          width: 100%;
-          max-width: 420px;
+        .orb1 {
+          width: 400px; height: 400px;
+          top: -100px; left: -100px;
+          background: radial-gradient(circle, rgba(0,88,190,0.25), transparent 70%);
         }
+        .orb2 {
+          width: 300px; height: 300px;
+          bottom: -80px; right: -60px;
+          background: radial-gradient(circle, rgba(16,185,129,0.15), transparent 70%);
+        }
+        .auth-left-content { position: relative; z-index: 1; max-width: 380px; }
+        .auth-logo { color: white !important; margin-bottom: 2.5rem; display: inline-flex; }
+        .auth-brand-h2 {
+          font-family: var(--font-display);
+          font-size: clamp(1.8rem, 3vw, 2.4rem);
+          font-weight: 800; letter-spacing: -0.04em;
+          color: white; line-height: 1.1; margin-bottom: 2rem;
+        }
+        .auth-stats { display: flex; gap: 1.5rem; margin-bottom: 2rem; }
+        .auth-stat-val { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: white; }
+        .auth-stat-label { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 0.1rem; }
+        .auth-bullets { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
+        .auth-bullet { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; color: rgba(255,255,255,0.7); }
+        .auth-bullet-icon { color: var(--tertiary); font-weight: 700; }
 
-        .auth-google-btn {
-          width: 100%;
+        .auth-right {
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.75rem;
-          background: white;
-          border: 1px solid var(--outline);
-          border-radius: var(--radius-md);
-          padding: 0.75rem 1rem;
-          font-family: var(--font-body);
-          font-weight: 600;
-          font-size: 0.9rem;
-          color: var(--text);
-          cursor: pointer;
-          transition: box-shadow 0.15s, border-color 0.15s;
-          box-shadow: var(--shadow-sm);
+          padding: 2rem;
+          background: var(--bg);
         }
-        .auth-google-btn:hover:not(:disabled) { box-shadow: var(--shadow-md); border-color: var(--outline-strong); }
-        .auth-google-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .auth-form-wrap { width: 100%; max-width: 440px; }
+
+        .auth-tabs {
+          display: flex;
+          border-bottom: 1px solid var(--surface-high);
+          margin-bottom: 1.5rem;
+          gap: 0.25rem;
+        }
+        .auth-tab {
+          padding: 0.6rem 0.9rem;
+          background: none; border: none;
+          font-family: var(--font-body); font-size: 0.875rem; font-weight: 500;
+          color: var(--muted); cursor: pointer;
+          border-bottom: 2px solid transparent;
+          margin-bottom: -1px;
+          transition: color 0.15s, border-color 0.15s;
+        }
+        .auth-tab:hover { color: var(--text); }
+        .auth-tab-active { color: var(--secondary) !important; border-bottom-color: var(--secondary); }
+
+        .auth-form-card {
+          background: var(--surface-float);
+          border-radius: var(--radius-xl);
+          padding: 2rem;
+          box-shadow: var(--shadow-md);
+        }
+
+        .google-btn {
+          width: 100%;
+          display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+          background: white; border: 1px solid var(--outline);
+          border-radius: var(--radius-md); padding: 0.8rem 1.25rem;
+          font-family: var(--font-body); font-size: 0.95rem; font-weight: 600;
+          color: var(--text); cursor: pointer;
+          box-shadow: var(--shadow-sm);
+          transition: box-shadow 0.15s, border-color 0.15s;
+        }
+        .google-btn:hover:not(:disabled) { box-shadow: var(--shadow-md); border-color: var(--outline-strong); }
+        .google-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .auth-divider {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin: 1.25rem 0;
-          color: var(--muted);
-          font-size: 0.75rem;
+          display: flex; align-items: center; gap: 1rem;
+          margin: 1.25rem 0; color: var(--muted); font-size: 0.8rem;
         }
-        .auth-divider::before, .auth-divider::after {
-          content: "";
-          flex: 1;
-          height: 1px;
-          background: var(--outline);
-        }
+        .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--surface-high); }
 
-        .auth-field {
-          display: flex;
-          flex-direction: column;
-          gap: 0.4rem;
-        }
-        .auth-field label {
-          font-size: 0.6875rem;
-          font-weight: 600;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          color: var(--muted);
-        }
-        .auth-field input {
-          background: var(--surface-highest);
-          border: none;
-          border-radius: var(--radius-sm);
-          color: var(--text);
-          font-family: var(--font-body);
-          font-size: 0.95rem;
-          padding: 0.75rem 0.9rem;
-          outline: none;
-          width: 100%;
-          transition: background 0.15s, box-shadow 0.15s;
-        }
-        .auth-field input:focus {
-          background: var(--surface-float);
-          box-shadow: 0 0 0 2px var(--secondary);
-        }
+        .forgot-link { background: none; border: none; color: var(--secondary); font-size: 0.8rem; cursor: pointer; font-family: var(--font-body); }
+        .forgot-link:hover { text-decoration: underline; }
 
-        @media (max-width: 768px) {
-          .auth-brand { display: none; }
-          .auth-mobile-logo { display: flex; }
-          .auth-form-panel { justify-content: flex-start; padding-top: 5rem; }
+        .pw-strength { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+        .pw-bars { display: flex; gap: 3px; }
+        .pw-bar { width: 30px; height: 3px; border-radius: 2px; transition: background 0.3s; }
+
+        .forgot-success { text-align: center; padding: 1rem 0; }
+
+        .auth-footer-links {
+          display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+          margin-top: 1.5rem; justify-content: center;
+          font-size: 0.75rem; color: var(--muted);
         }
+        .auth-footer-links a { color: var(--muted); text-decoration: none; }
+        .auth-footer-links a:hover { color: var(--text-mid); }
       `}</style>
     </>
   );
