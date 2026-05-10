@@ -56,10 +56,10 @@ export async function compareProviders({ amount, currency_from, currency_to }) {
 // ── /api/users ─────────────────────────────────────────────────────────────────
 
 /** Upsert user row after Clerk sign-in/sign-up */
-export async function syncUser({ clerk_id, email, full_name }) {
+export async function syncUser(token, { clerk_id, email, full_name }) {
   const res = await fetch(`${API_URL}/api/users/sync`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
     body: JSON.stringify({ clerk_id, email, full_name }),
   });
   return handleResponse(res);
@@ -160,4 +160,13 @@ export async function deleteAlert(token, id) {
     throw errorObj;
   }
   // 204 No Content — no body
+}
+
+export async function submitContactForm(data) {
+  const res = await fetch(`${API_URL}/api/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
 }

@@ -23,15 +23,16 @@ export default function PostAuth() {
     const routeUser = async () => {
       try {
         // 1. Ensure user row exists in DB (safe to call repeatedly — idempotent)
-        await syncUser({
+        const token = await getToken();
+        await syncUser(token, {
           clerk_id:  user?.id || "",
           email:     user?.primaryEmailAddress?.emailAddress || "",
           full_name: user?.fullName || user?.username || "",
         });
 
         // 2. Check if onboarding is complete
-        const { exists } = await checkStatus();
-        if (exists) {
+        const { exists, is_onboarded } = await checkStatus();
+        if (exists && is_onboarded) {
           // Returning user with a profile → go to dashboard
           router.push("/dashboard");
         } else {

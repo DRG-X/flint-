@@ -58,9 +58,9 @@ export default function Footer() {
         <div className="footer-bottom">
           <p>© {currentYear} Vaulto. All rights reserved. Rates are indicative only.</p>
           <div className="footer-legal">
-            <Link href="#">Privacy Policy</Link>
-            <Link href="#">Terms of Service</Link>
-            <Link href="#">Cookie Policy</Link>
+            <Link href="/privacy">Privacy Policy</Link>
+            <Link href="/terms">Terms of Service</Link>
+            <Link href="/cookies">Cookie Policy</Link>
           </div>
         </div>
       </div>

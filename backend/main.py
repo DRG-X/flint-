@@ -23,11 +23,12 @@ from schemas import (
     OnboardingComplete,
     ComparisonCreate, ComparisonRead,
     RateAlertCreate, RateAlertRead, RateAlertUpdate,
+    ContactMessage,
 )
 from engine.comparator import compare
 
 import models
-from database import engine, get_db
+from database import Base, engine, get_db
 from auth import verify_clerk_token
 from cache import get_cached_rates, set_cached_rates, init_cache, close_cache
 
@@ -46,6 +47,9 @@ logger = logging.getLogger("flint")
 async def lifespan(app: FastAPI):
     """Initialise shared resources on startup; clean up on shutdown."""
     await init_cache()   # connect Redis + PING test
+    from models import User, Comparison, RateAlert  # noqa — ensures models registered
+    Base.metadata.create_all(bind=engine)           # safety net: create tables if not present
+    logger.info("CORS allowed origins: %s", allowed_origins)
     yield
     await close_cache()  # graceful shutdown
 
@@ -58,9 +62,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,7 +78,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-limiter = Limiter(key_func=get_remote_address)
+def _real_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return (request.client.host if request.client else "unknown")
+
+limiter = Limiter(key_func=_real_ip)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -96,7 +109,10 @@ def get_user_status(
     user = db.query(models.User).filter(
         models.User.clerk_user_id == user_auth["clerk_user_id"]
     ).first()
-    return {"exists": user is not None}
+    return {
+        "exists": user is not None,
+        "is_onboarded": user.is_onboarded if user else False
+    }
 
 
 @app.get("/user/profile", response_model=ProfileResponse)
@@ -147,13 +163,14 @@ def create_user_profile(
 
 
 @app.post("/compare", response_model=CompareResponse)
-async def compare_providers(request: CompareRequest):
-    logger.info(f"compare request: {request.amount} {request.currency_from} → {request.currency_to}")
+@limiter.limit("20/minute")
+async def compare_providers(request: Request, body: CompareRequest):
+    logger.info(f"compare request: {body.amount} {body.currency_from} → {body.currency_to}")
     try:
-        result = await compare(request)
+        result = await compare(body)
         logger.info(
             f"compare done: best={result.best_provider.provider} "
-            f"({result.best_provider.receive_amount} {request.currency_to}), "
+            f"({result.best_provider.receive_amount} {body.currency_to}), "
             f"failed={result.failed_providers}"
         )
         return result
@@ -164,6 +181,16 @@ async def compare_providers(request: CompareRequest):
         raise HTTPException(status_code=500, detail="Internal error")
 
 
+@app.post("/api/contact", status_code=200)
+async def submit_contact(body: ContactMessage):
+    logger.info(
+        "CONTACT FORM — name=%s email=%s subject=%s",
+        body.name, body.email, body.subject
+    )
+    logger.info("CONTACT MESSAGE — %s", body.message[:500])
+    return {"status": "received"}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # /api/users  — user management
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -171,13 +198,13 @@ async def compare_providers(request: CompareRequest):
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 @users_router.post("/sync", response_model=UserRead)
-def sync_user(body: UserSync, db: Session = Depends(get_db)):
+def sync_user(body: UserSync, user_auth: dict = Depends(verify_clerk_token), db: Session = Depends(get_db)):
     """
     Called after Clerk sign-up/sign-in from post-auth.js.
     Creates the user row if it doesn't exist, returns the user either way.
-    Does NOT require auth header — the Clerk webhook / post-auth page
-    passes the clerk_id directly.
     """
+    if body.clerk_id != user_auth["clerk_user_id"]:
+        raise HTTPException(status_code=403, detail="Cannot sync another user's account")
     user = db.query(models.User).filter(models.User.clerk_user_id == body.clerk_id).first()
     if user:
         # Update name/email if provided

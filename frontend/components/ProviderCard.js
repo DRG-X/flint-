@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 import { saveComparison } from "../lib/api";
 
 const PROVIDER_URLS = {
@@ -97,13 +98,24 @@ export default function ProviderCard({ provider, rank, isBest, sortBy, onAlert, 
             {saved ? "✓ Saved" : saving ? "Saving…" : "💾 Save"}
           </button>
         ) : null}
-        <button
-          className="btn-ghost-sm"
-          onClick={() => onAlert && onAlert(provider)}
-          id={`alert-${provider.provider.toLowerCase().replace(/\s/g,"-")}`}
-        >
-          🔔 Alert
-        </button>
+        {isSignedIn ? (
+          <button
+            className="btn-ghost-sm"
+            onClick={() => onAlert && onAlert(provider)}
+            id={`alert-${provider.provider.toLowerCase().replace(/\s/g,"-")}`}
+          >
+            🔔 Alert
+          </button>
+        ) : (
+          <Link
+            href="/auth?mode=signup"
+            className="btn-ghost-sm"
+            style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            id={`alert-${provider.provider.toLowerCase().replace(/\s/g,"-")}`}
+          >
+            🔔 Alert
+          </Link>
+        )}
         <a
           href={PROVIDER_URLS[provider.provider] || "#"}
           target="_blank"

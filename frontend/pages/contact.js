@@ -3,6 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Nav from "../components/Nav";
 import Footer from "../components/Footer";
+import { submitContactForm } from "../lib/api";
 
 const FAQS = [
   { q: "How do I report an issue with a transfer?", a: "Contact us via WhatsApp or email with your Vaulto comparison ID. We'll escalate directly to the provider on your behalf." },
@@ -33,10 +34,19 @@ function FAQItem({ q, a }) {
 export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", subject: SUBJECTS[0], message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      await submitContactForm(form);
+      setSubmitted(true);
+    } catch {
+      alert("Failed to send. Please email support@vaulto.app directly.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -92,8 +102,8 @@ export default function Contact() {
                   <label htmlFor="c-message">Message</label>
                   <textarea id="c-message" required rows={5} value={form.message} onChange={e => setForm({...form, message: e.target.value})} placeholder="Describe your question or issue…" style={{ width: "100%", background: "var(--surface-highest)", border: "none", borderRadius: "var(--radius-sm)", padding: "0.75rem 0.9rem", fontFamily: "var(--font-body)", fontSize: "0.95rem", color: "var(--text)", resize: "vertical", outline: "none" }} />
                 </div>
-                <button type="submit" className="btn-secondary" style={{ marginTop: "1rem", width: "100%", justifyContent: "center" }} id="contact-submit">
-                  Send message →
+                <button type="submit" className="btn-secondary" style={{ marginTop: "1rem", width: "100%", justifyContent: "center" }} id="contact-submit" disabled={submitting}>
+                  {submitting ? "Sending…" : "Send message →"}
                 </button>
               </form>
             )}

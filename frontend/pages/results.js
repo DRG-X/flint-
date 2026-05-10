@@ -94,6 +94,10 @@ export default function Results() {
   };
 
   const handleAlert = (provider) => {
+    if (!isSignedIn) {
+      router.push('/auth?mode=signup');
+      return;
+    }
     setAlertTarget(provider);
     setAlertOpen(true);
   };

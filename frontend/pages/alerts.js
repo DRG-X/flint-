@@ -32,7 +32,7 @@ export default function Alerts() {
     try {
       const token = await getToken();
       const [alts, me] = await Promise.all([listAlerts(token), getMe(token)]);
-      setAlerts(alts?.items || alts || []);
+      setAlerts(Array.isArray(alts) ? alts : []);
       setProfile(me);
     } catch (e) {
       setError(e.message || "Failed to load alerts.");

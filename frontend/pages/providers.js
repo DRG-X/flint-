@@ -46,6 +46,12 @@ const PROVIDERS = [
   },
 ];
 
+const PROVIDER_URLS = {
+  wise: "https://wise.com",
+  remitly: "https://remitly.com",
+  "western-union": "https://westernunion.com",
+};
+
 const FAQS = [
   { q: "How do I know which provider has the best rate?", a: "Use Vaulto's live comparison tool to see real-time rates from all providers simultaneously. The best rate changes throughout the day." },
   { q: "Are there hidden fees I should know about?", a: "Yes — most providers hide fees inside the exchange rate by marking it up from the mid-market rate. Vaulto shows you the true cost including rate markup + explicit fees." },
@@ -140,7 +146,7 @@ export default function Providers() {
                   <Link href={`/providers/${p.id}`} className="btn-secondary" style={{ flex: 1, justifyContent: "center" }} id={`provider-detail-${p.id}`}>
                     Compare {p.name} →
                   </Link>
-                  <a href="#" target="_blank" rel="noopener noreferrer" className="btn-ghost">Visit site ↗</a>
+                  <a href={PROVIDER_URLS[p.id]} target="_blank" rel="noopener noreferrer" className="btn-ghost">Visit site ↗</a>
                 </div>
               </div>
             ))}

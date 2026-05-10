@@ -41,7 +41,7 @@ export default function History() {
     try {
       const token = await getToken();
       const data = await listComparisons(token, { page: p, limit: 20 });
-      const items = data?.items || data || [];
+      const items = Array.isArray(data) ? data : [];
       setComparisons(items);
       setHasMore(items.length === 20);
     } catch (e) {

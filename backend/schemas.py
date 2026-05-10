@@ -118,6 +118,7 @@ class ProfileResponse(BaseModel):
 class UserStatusResponse(BaseModel):
     """Lightweight check — does this Clerk user already have a saved profile?"""
     exists: bool
+    is_onboarded: bool = False
 
 
 # ──────────────── Comparison schemas ────────────────────────────────────────────────────────
@@ -178,3 +179,10 @@ class RateAlertUpdate(BaseModel):
     notify_email: Optional[bool] = None
     notify_whatsapp: Optional[bool] = None
     provider: Optional[str] = None
+
+
+class ContactMessage(BaseModel):
+    name: str
+    email: str
+    subject: str
+    message: str

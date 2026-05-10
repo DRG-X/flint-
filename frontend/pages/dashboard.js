@@ -44,15 +44,30 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const token = await getToken();
-        const [me, comps, alts] = await Promise.all([
+        const [meResult, compsResult, altsResult] = await Promise.allSettled([
           getMe(token),
           listComparisons(token, { page: 1, limit: 5 }),
           listAlerts(token),
         ]);
+
+        const me    = meResult.status    === "fulfilled" ? meResult.value    : null;
+        const comps = compsResult.status === "fulfilled" ? compsResult.value : [];
+        const alts  = altsResult.status  === "fulfilled" ? altsResult.value  : [];
+
+        if (!me) {
+          setError("Failed to load your profile. Please refresh the page.");
+          setLoading(false);
+          return;
+        }
         if (!me.is_onboarded) { router.replace("/onboarding"); return; }
+
         setProfile(me);
-        setComparisons(comps?.items || comps || []);
-        setAlerts(alts?.items || alts || []);
+        setComparisons(Array.isArray(comps) ? comps : []);
+        setAlerts(Array.isArray(alts) ? alts : []);
+
+        if (compsResult.status === "rejected" || altsResult.status === "rejected") {
+          setError("Some data failed to load — showing partial results.");
+        }
       } catch (e) {
         setError(e.message || "Failed to load dashboard data.");
       } finally {

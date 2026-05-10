@@ -4,6 +4,7 @@ import { useAuth, useUser, useClerk } from "@clerk/nextjs";
 import Head from "next/head";
 import Link from "next/link";
 import { listComparisons } from "../../lib/api";
+import { isAdmin } from "../../lib/admin";
 
 const SIDEBAR_LINKS = [
   { href: "/admin/analytics", label: "📊 Analytics" },
@@ -41,11 +42,15 @@ export default function AdminAnalytics() {
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) { router.replace("/auth"); return; }
+    if (!isAdmin(user?.id)) {
+      router.replace("/dashboard");
+      return;
+    }
     getToken().then(token => listComparisons(token, { page: 1, limit: 10 }))
-      .then(data => setComparisons(data?.items || data || []))
+      .then(data => setComparisons(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, user?.id]);
 
   const handleSignOut = async () => { await signOut(); router.push("/"); };
 

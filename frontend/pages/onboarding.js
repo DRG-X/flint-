@@ -499,10 +499,26 @@ export default function Onboarding() {
                 </button>
               </div>
               <button
-                onClick={() => {
-                  setPhoneNumber("");
-                  setWaConsent(false);
-                  handleContinue();
+                onClick={async () => {
+                  if (loading) return;
+                  setLoading(true);
+                  setSubmitError("");
+                  try {
+                    const token = await getToken();
+                    await completeOnboarding(token, {
+                      country:          selectedCountry?.code || "",
+                      university:       selectedUniversity?.name || null,
+                      whatsapp_number:  null,
+                      home_currency:    homeCurrency || null,
+                      corridor_from:    homeCurrency || null,
+                      corridor_to:      corridorTo   || null,
+                    });
+                    router.push("/dashboard");
+                  } catch (err) {
+                    setSubmitError(err.message || "Something went wrong. Please try again.");
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
                 disabled={loading}
                 className="w-full text-center text-[#556078] text-sm mt-3 py-2 hover:text-[#8892a8] transition-colors disabled:opacity-50"
