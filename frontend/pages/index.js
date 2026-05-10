@@ -203,7 +203,7 @@ export default function Home() {
               <h2 className="display-md" style={{ color: "white" }}>Global Exchange Dynamics</h2>
               <p style={{ color: "rgba(255,255,255,0.6)", marginTop: "0.5rem" }}>Institutional-grade currency tracking, real-time execution spreads.</p>
             </div>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary" style={{ flexShrink: 0, alignSelf: "flex-start" }}>
+            <Link href="/results?from=AUD&to=INR&amount=1000" className="btn-secondary" style={{ flexShrink: 0, alignSelf: "flex-start" }}>
               Compare your corridor →
             </Link>
           </div>

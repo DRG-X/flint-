@@ -8,11 +8,11 @@ import AlertModal from "../components/AlertModal";
 import { getMe, listComparisons, listAlerts } from "../lib/api";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", icon: "⊞", label: "Dashboard" },
-  { href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
-  { href: "/history", icon: "📋", label: "History" },
-  { href: "/alerts", icon: "🔔", label: "Alerts" },
-  { href: "/insights", icon: "📊", label: "Insights" },
+  { key: "dashboard", href: "/dashboard", icon: "⊞", label: "Dashboard" },
+  { key: "transfers", href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
+  { key: "history", href: "/history", icon: "📋", label: "History" },
+  { key: "alerts", href: "/alerts", icon: "🔔", label: "Alerts" },
+  { key: "analytics", href: "/dashboard", icon: "📊", label: "Analytics" },
 ];
 
 function getGreeting() {
@@ -55,7 +55,14 @@ export default function Dashboard() {
         const alts  = altsResult.status  === "fulfilled" ? altsResult.value  : [];
 
         if (!me) {
-          setError("Failed to load your profile. Please refresh the page.");
+          const err = meResult.reason || {};
+          if (err.status === 404) {
+            setTimeout(() => router.replace('/onboarding'), 500);
+          } else if (err.status === 401) {
+            router.replace('/auth');
+          } else {
+            setError("Could not load your profile. Refresh to try again.");
+          }
           setLoading(false);
           return;
         }
@@ -94,6 +101,14 @@ export default function Dashboard() {
 
   if (!isLoaded || (isLoaded && !isSignedIn)) return null;
 
+  const isActive = (item) => {
+    if (item.key === 'dashboard') return router.pathname === '/dashboard';
+    if (item.key === 'transfers') return router.pathname === '/results';
+    if (item.key === 'history') return router.pathname === '/history';
+    if (item.key === 'alerts') return router.pathname === '/alerts';
+    return false;
+  };
+
   const Sidebar = () => (
     <aside className={`db-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
       <div className="sidebar-logo-wrap">
@@ -107,13 +122,16 @@ export default function Dashboard() {
       <nav className="sidebar-nav">
         {NAV_ITEMS.map(item => (
           <Link
-            key={item.href}
+            key={item.key}
             href={item.href}
-            className={`sidebar-link ${router.pathname === item.href.split("?")[0] ? "sidebar-link-active" : ""}`}
+            className={`sidebar-link ${isActive(item) ? "sidebar-link-active" : ""}`}
             onClick={() => setSidebarOpen(false)}
           >
             <span className="sidebar-icon">{item.icon}</span>
-            {item.label}
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ lineHeight: 1 }}>{item.label}</span>
+              {item.key === 'analytics' && <span style={{ fontSize: "0.65rem", opacity: 0.6, marginTop: "0.2rem" }}>(Coming soon)</span>}
+            </div>
           </Link>
         ))}
       </nav>

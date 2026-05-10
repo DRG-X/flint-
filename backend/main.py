@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     await init_cache()   # connect Redis + PING test
     from models import User, Comparison, RateAlert  # noqa — ensures models registered
     Base.metadata.create_all(bind=engine)           # safety net: create tables if not present
-    logger.info("CORS allowed origins: %s", allowed_origins)
+    logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
     yield
     await close_cache()  # graceful shutdown
 
@@ -62,12 +62,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

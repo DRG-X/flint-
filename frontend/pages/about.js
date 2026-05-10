@@ -138,7 +138,7 @@ export default function About() {
         <div className="container" style={{ textAlign: "center" }}>
           <h2 className="display-md" style={{ color: "white", marginBottom: "1rem" }}>Ready to start saving?</h2>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary">Compare rates →</Link>
+            <Link href="/results?from=AUD&to=INR&amount=1000" className="btn-secondary">Compare rates →</Link>
             <Link href="/auth?mode=signup" className="btn-ghost" style={{ color: "rgba(255,255,255,0.8)", borderColor: "rgba(255,255,255,0.25)" }}>Create free account</Link>
           </div>
         </div>

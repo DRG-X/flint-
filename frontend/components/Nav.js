@@ -33,7 +33,7 @@ export default function Nav({ variant = "light", showDashboardLink = false }) {
     : "?";
 
   const navLinks = [
-    { href: "/results?from=GBP&to=INR&amount=1000", label: "Compare" },
+    { href: "/results?from=AUD&to=INR&amount=1000", label: "Compare" },
     { href: "/providers", label: "Providers" },
     { href: "/insights", label: "Insights" },
     { href: "/about", label: "About" },

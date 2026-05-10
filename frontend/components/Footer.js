@@ -26,7 +26,7 @@ export default function Footer() {
           <div className="footer-col">
             <h4 className="footer-heading">Product</h4>
             <ul className="footer-links">
-              <li><Link href="/results?from=GBP&to=INR&amount=1000">Compare Rates</Link></li>
+              <li><Link href="/results?from=AUD&to=INR&amount=1000">Compare Rates</Link></li>
               <li><Link href="/providers">Browse Providers</Link></li>
               <li><Link href="/alerts">Rate Alerts</Link></li>
               <li><Link href="/insights">Insights</Link></li>

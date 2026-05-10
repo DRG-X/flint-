@@ -104,7 +104,7 @@ export default function Providers() {
             We've vetted the most secure and efficient money transfer services across the globe. Compare fees, speed, and reliability in one unified interface.
           </p>
           <div style={{ textAlign: "center" }}>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary" id="providers-compare-btn">
+            <Link href="/results?from=AUD&to=INR&amount=1000" className="btn-secondary" id="providers-compare-btn">
               Compare live rates →
             </Link>
           </div>
@@ -143,7 +143,7 @@ export default function Providers() {
                   {p.bestFor.map(b => <div key={b} className="prov-best-item">★ {b}</div>)}
                 </div>
                 <div className="prov-actions">
-                  <Link href={`/providers/${p.id}`} className="btn-secondary" style={{ flex: 1, justifyContent: "center" }} id={`provider-detail-${p.id}`}>
+                  <Link href={`/results?from=AUD&to=INR&amount=1000&highlight=${p.id}`} className="btn-secondary" style={{ flex: 1, justifyContent: "center" }} id={`provider-detail-${p.id}`}>
                     Compare {p.name} →
                   </Link>
                   <a href={PROVIDER_URLS[p.id]} target="_blank" rel="noopener noreferrer" className="btn-ghost">Visit site ↗</a>
@@ -162,8 +162,8 @@ export default function Providers() {
             Vaulto connects you to 200+ countries via 150+ currencies in real time. Find the best provider for your specific needs.
           </p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-secondary">View Global Map</Link>
-            <Link href="/results?from=GBP&to=INR&amount=1000" className="btn-ghost" style={{ color: "rgba(255,255,255,0.8)", borderColor: "rgba(255,255,255,0.25)" }}>Currency Data</Link>
+            <Link href="/results?from=AUD&to=INR&amount=1000" className="btn-secondary">View Global Map</Link>
+            <Link href="/results?from=AUD&to=INR&amount=1000" className="btn-ghost" style={{ color: "rgba(255,255,255,0.8)", borderColor: "rgba(255,255,255,0.25)" }}>Currency Data</Link>
           </div>
         </div>
       </section>
