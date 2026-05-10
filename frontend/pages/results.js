@@ -48,6 +48,7 @@ export default function Results() {
   const [sortBy, setSortBy] = useState("rate");
   const [alertTarget, setAlertTarget] = useState(null);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [avoidOpen, setAvoidOpen] = useState(false);
 
   // Inline search form state
   const [formFrom, setFormFrom] = useState(from);
@@ -242,6 +243,41 @@ export default function Results() {
                 ))}
               </div>
 
+              <button 
+                className="avoid-toggle-btn"
+                onClick={() => setAvoidOpen(!avoidOpen)}
+              >
+                {avoidOpen ? "🏦 Why banks cost more ▲" : "🏦 See why banks are expensive ▼"}
+              </button>
+
+              {avoidOpen && (
+                <div className="avoid-banks-section anim-fade-up">
+                  <div className="avoid-grid">
+                    {['CommBank', 'ANZ', 'Westpac', 'NAB'].map((bank) => (
+                      <div key={bank} className="avoid-card">
+                        <div className="avoid-card-header">
+                          <span className="avoid-bank-name">{bank}</span>
+                          <span className="pill" style={{ color: "var(--error)", background: "var(--error-surface)" }}>
+                            ⚠ AVOID
+                          </span>
+                        </div>
+                        <div className="avoid-card-body">
+                          <p className="avoid-placeholder-text">Rate: ~52–54 INR per AUD (estimated)</p>
+                          <p className="avoid-placeholder-text">Fee: AUD 20–30 typical</p>
+                          <div className="avoid-badge">3–5× higher fees than Wise</div>
+                          <p className="avoid-body-copy">
+                            Your bank charges an estimated <strong>AUD 15–25</strong> more than Wise for the same AUD 1,000 transfer.
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="avoid-disclaimer">
+                    Rates are indicative estimates. Banks do not publish live FX rates via API.
+                  </p>
+                </div>
+              )}
+
               {/* No results */}
               {sortedResults.length === 0 && !error && (
                 <div className="empty-state card">
@@ -388,6 +424,67 @@ export default function Results() {
           font-size: 0.75rem;
           color: var(--muted);
           line-height: 1.6;
+        }
+
+        .avoid-toggle-btn {
+          background: var(--surface-float);
+          border: 1px solid var(--outline);
+          border-radius: var(--radius-md);
+          padding: 0.65rem 1.25rem;
+          font-family: var(--font-body);
+          font-weight: 600;
+          font-size: 0.875rem;
+          color: var(--error);
+          cursor: pointer;
+          width: 100%;
+          text-align: left;
+          margin-top: 1.5rem;
+        }
+        .avoid-banks-section { margin-top: 1rem; }
+        .avoid-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+          margin-bottom: 1rem;
+        }
+        @media (max-width: 600px) {
+          .avoid-grid { grid-template-columns: 1fr; }
+        }
+        .avoid-card {
+          border-left: 3px solid var(--error);
+          background: var(--error-surface);
+          border-radius: var(--radius-md);
+          padding: 1rem;
+        }
+        .avoid-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.75rem;
+        }
+        .avoid-bank-name {
+          font-family: var(--font-display);
+          font-weight: 700;
+        }
+        .avoid-placeholder-text {
+          font-size: 0.85rem;
+          color: var(--muted);
+          margin-bottom: 0.25rem;
+        }
+        .avoid-badge {
+          font-size: 0.7rem;
+          font-weight: 700;
+          color: var(--error);
+          margin: 0.5rem 0;
+        }
+        .avoid-body-copy {
+          font-size: 0.85rem;
+          line-height: 1.4;
+        }
+        .avoid-disclaimer {
+          font-size: 0.8rem;
+          color: var(--muted);
+          text-align: center;
         }
       `}</style>
     </>

@@ -4,11 +4,11 @@ import Link from "next/link";
 import { saveComparison } from "../lib/api";
 
 const PROVIDER_URLS = {
-  Wise: "https://wise.com",
-  Remitly: "https://remitly.com",
-  "Western Union": "https://westernunion.com",
-  XE: "https://xe.com",
-  Revolut: "https://revolut.com",
+  Wise: "https://wise.com?utm_source=vaulto&utm_medium=comparison&utm_campaign=aud-inr",
+  Remitly: "https://remitly.com?utm_source=vaulto&utm_medium=comparison&utm_campaign=aud-inr",
+  "Western Union": "https://westernunion.com?utm_source=vaulto&utm_medium=comparison&utm_campaign=aud-inr",
+  XE: "https://xe.com?utm_source=vaulto&utm_medium=comparison",
+  Revolut: "https://revolut.com?utm_source=vaulto&utm_medium=comparison",
 };
 
 /**
@@ -46,6 +46,18 @@ export default function ProviderCard({ provider, rank, isBest, sortBy, onAlert, 
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleProviderClick = (providerName) => {
+    if (typeof window !== "undefined" && window.console) {
+      console.log("[vaulto] provider_click", {
+        provider: providerName,
+        corridor: `${provider.currency_from}-${provider.currency_to}`,
+        amount: provider.send_amount,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    // TODO: POST to /api/clicks when endpoint is ready
   };
 
   return (
@@ -122,6 +134,7 @@ export default function ProviderCard({ provider, rank, isBest, sortBy, onAlert, 
           rel="noopener noreferrer"
           className={isBest ? "pc-cta-primary" : "pc-cta-ghost"}
           id={`send-${provider.provider.toLowerCase().replace(/\s/g,"-")}`}
+          onClick={() => handleProviderClick(provider.provider)}
         >
           Send with {provider.provider} →
         </a>
