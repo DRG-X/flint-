@@ -21,6 +21,12 @@ export default function PostAuth() {
     }
 
     const routeUser = async () => {
+      let isTimedOut = false;
+      const timeoutId = setTimeout(() => {
+        isTimedOut = true;
+        setErrorMsg("Server is taking too long. Please try again.");
+      }, 10000);
+
       try {
         // 1. Ensure user row exists in DB (safe to call repeatedly — idempotent)
         const token = await getToken();
@@ -32,6 +38,10 @@ export default function PostAuth() {
 
         // 2. Check if onboarding is complete
         const { exists, is_onboarded } = await checkStatus();
+        clearTimeout(timeoutId);
+
+        if (isTimedOut) return;
+
         if (exists && is_onboarded) {
           // Returning user with a profile → go to dashboard
           router.push("/dashboard");
@@ -40,7 +50,10 @@ export default function PostAuth() {
           router.push("/onboarding");
         }
       } catch (err) {
-        setErrorMsg(err.message || "Failed to set up your account. Please try again.");
+        clearTimeout(timeoutId);
+        if (!isTimedOut) {
+          setErrorMsg(err.message || "Failed to set up your account. Please try again.");
+        }
       }
     };
 
@@ -50,26 +63,26 @@ export default function PostAuth() {
   return (
     <>
       <Head>
-        <title>Loading... — Flint</title>
+        <title>Loading... — Vaulto</title>
       </Head>
-      <div className="min-h-screen bg-[#06080d] flex flex-col items-center justify-center text-[#e8ecf4]">
+      <div className="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center text-[var(--text)]">
         {errorMsg ? (
-          <div className="text-center animate-fade-in">
-            <div className="text-red-400 mb-4 text-sm">{errorMsg}</div>
+          <div className="text-center animate-fade-in max-w-md w-full px-5">
+            <div className="error-box">{errorMsg}</div>
             <button
               onClick={() => window.location.reload()}
-              className="bg-cyan-500/10 text-cyan-400 text-sm font-medium px-6 py-2.5 rounded-xl hover:bg-cyan-500/20 transition-colors"
+              className="btn-secondary mt-2"
             >
               Retry
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center animate-pulse-glow">
-            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-2xl shadow-[0_0_20px_rgba(34,211,238,0.3)] mb-6">
-              ⚡
+          <div className="loading-box animate-pulse-glow">
+            <div className="mb-6 flex justify-center logo">
+              <span className="logo-mark">V</span><span>Vaulto</span>
             </div>
-            <div className="w-6 h-6 border-2 border-[#243049] border-t-cyan-400 rounded-full animate-spin"></div>
-            <p className="mt-4 text-[#556078] text-sm tracking-wider uppercase font-semibold">Preparing your Flint</p>
+            <div className="spinner"></div>
+            <p className="mt-4 text-[var(--muted)] text-sm tracking-wider uppercase font-semibold">Preparing your Vaulto</p>
           </div>
         )}
       </div>

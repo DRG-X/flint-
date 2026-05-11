@@ -6,13 +6,13 @@ import Link from "next/link";
 import CompareWidget from "../components/CompareWidget";
 import AlertModal from "../components/AlertModal";
 import { getMe, listComparisons, listAlerts } from "../lib/api";
+import { isAdmin } from "../lib/admin";
 
 const NAV_ITEMS = [
   { key: "dashboard", href: "/dashboard", icon: "⊞", label: "Dashboard" },
   { key: "transfers", href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
   { key: "history", href: "/history", icon: "📋", label: "History" },
   { key: "alerts", href: "/alerts", icon: "🔔", label: "Alerts" },
-  { key: "analytics", href: "/dashboard", icon: "📊", label: "Analytics" },
 ];
 
 function getGreeting() {
@@ -57,7 +57,7 @@ export default function Dashboard() {
         if (!me) {
           const err = meResult.reason || {};
           if (err.status === 404) {
-            setTimeout(() => router.replace('/onboarding'), 500);
+            router.replace('/onboarding');
           } else if (err.status === 401) {
             router.replace('/auth');
           } else {
@@ -72,7 +72,9 @@ export default function Dashboard() {
         setComparisons(Array.isArray(comps) ? comps : []);
         setAlerts(Array.isArray(alts) ? alts : []);
 
-        if (compsResult.status === "rejected" || altsResult.status === "rejected") {
+        const compsErr = compsResult.status === "rejected" ? compsResult.reason : null;
+        const altsErr = altsResult.status === "rejected" ? altsResult.reason : null;
+        if ((compsErr && compsErr.status !== 404) || (altsErr && altsErr.status !== 404)) {
           setError("Some data failed to load — showing partial results.");
         }
       } catch (e) {
@@ -94,7 +96,9 @@ export default function Dashboard() {
     : "?";
 
   const firstName = user?.firstName || "there";
-  const corridor = profile ? `${profile.corridor_from} → ${profile.corridor_to}` : null;
+  const corridor = (profile?.corridor_from && profile?.corridor_to)
+    ? `${profile.corridor_from} → ${profile.corridor_to}`
+    : null;
   const activeAlerts = (alerts || []).filter(a => a.is_active !== false).slice(0, 4);
   const totalComparisons = comparisons?.length || 0;
   const totalAlerts = (alerts || []).length;
@@ -116,7 +120,9 @@ export default function Dashboard() {
           <span className="logo-mark">V</span>
           <span>Vaulto</span>
         </Link>
-        <span className="sidebar-tier">Elite Tier</span>
+        {isAdmin(user?.id) && (
+          <span className="sidebar-tier" style={{ backgroundColor: "#7c3aed" }}>Admin</span>
+        )}
       </div>
 
       <nav className="sidebar-nav">
@@ -134,6 +140,12 @@ export default function Dashboard() {
             </div>
           </Link>
         ))}
+        {isAdmin(user?.id) && (
+          <Link href="/admin/analytics" className="sidebar-link">
+            <span className="sidebar-icon">📊</span>
+            <span>Analytics</span>
+          </Link>
+        )}
       </nav>
 
       <div className="sidebar-bottom">
@@ -178,9 +190,12 @@ export default function Dashboard() {
 
           <div className="db-content">
             {error && (
-              <div className="error-box" style={{ marginBottom: "1.5rem" }}>
-                ⚠️ {error}
-                <button onClick={() => setError("")} style={{ marginLeft: "1rem", background: "none", border: "none", cursor: "pointer", color: "inherit", textDecoration: "underline" }}>Dismiss</button>
+              <div className="error-box" style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>⚠️ {error}</div>
+                <div>
+                  <button onClick={() => window.location.reload()} style={{ marginLeft: "1rem", background: "none", border: "none", cursor: "pointer", color: "inherit", textDecoration: "underline", fontWeight: "bold" }}>Retry</button>
+                  <button onClick={() => setError("")} style={{ marginLeft: "1rem", background: "none", border: "none", cursor: "pointer", color: "inherit", textDecoration: "underline" }}>Dismiss</button>
+                </div>
               </div>
             )}
 
@@ -198,7 +213,7 @@ export default function Dashboard() {
             </div>
 
             {/* Smart Insight Card */}
-            {profile?.corridor_from && (
+            {corridor && (
               <div className="smart-card anim-fade-up">
                 <div>
                   <p className="label-sm" style={{ color: "rgba(255,255,255,0.5)", marginBottom: "0.5rem" }}>
@@ -226,7 +241,7 @@ export default function Dashboard() {
             <div className="card anim-fade-up anim-delay-1" style={{ marginBottom: "1.5rem" }}>
               <p className="label-sm" style={{ marginBottom: "1rem" }}>Quick Compare</p>
               <CompareWidget
-                defaultFrom={profile?.corridor_from || "GBP"}
+                defaultFrom={profile?.corridor_from || "AUD"}
                 defaultTo={profile?.corridor_to || "INR"}
                 defaultAmount={1000}
               />

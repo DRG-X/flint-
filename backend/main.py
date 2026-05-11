@@ -29,7 +29,7 @@ from engine.comparator import compare
 
 import models
 from database import Base, engine, get_db
-from auth import verify_clerk_token
+from auth import verify_clerk_token, verify_admin_token
 from cache import get_cached_rates, set_cached_rates, init_cache, close_cache
 
 
@@ -523,3 +523,21 @@ def delete_alert(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete alert")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# /api/admin
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/stats")
+def get_admin_stats(
+    user_auth: dict = Depends(verify_admin_token),
+    db: Session = Depends(get_db)
+):
+    total_users = db.query(models.User).count()
+    total_comparisons = db.query(models.Comparison).count()
+    total_alerts = db.query(models.RateAlert).count()
+    return {
+        "total_users": total_users,
+        "total_comparisons": total_comparisons,
+        "total_alerts": total_alerts,
+    }

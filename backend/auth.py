@@ -43,3 +43,10 @@ def verify_clerk_token(credentials: HTTPAuthorizationCredentials = Security(secu
         }
     except jwt.PyJWTError as e:
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+
+def verify_admin_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    user = verify_clerk_token(credentials)
+    admin_ids = [s.strip() for s in os.environ.get("ADMIN_CLERK_IDS", "").split(",") if s.strip()]
+    if not admin_ids or user["clerk_user_id"] not in admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user

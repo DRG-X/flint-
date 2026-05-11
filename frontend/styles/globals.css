@@ -16,6 +16,10 @@
   --surface-highest:  #e0e3e5;    /* highest container */
   --surface-float:    #ffffff;    /* floating cards, modals */
 
+  /* Missing variables */
+  --border2:          #d1d5db;
+  --surface-border:   1px solid var(--border2);
+
   /* Brand colors */
   --primary:          #0B1220;    /* deep navy — authority */
   --primary-dim:      #151b2a;    /* gradient end */
