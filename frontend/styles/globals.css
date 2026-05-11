@@ -17,6 +17,7 @@
   --surface-float:    #ffffff;    /* floating cards, modals */
 
   /* Missing variables */
+  --border:           #e6e8ea;
   --border2:          #d1d5db;
   --surface-border:   1px solid var(--border2);
 

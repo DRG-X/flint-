@@ -524,6 +524,9 @@ def delete_alert(
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete alert")
 
+app.include_router(alerts_router)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # /api/admin
 # ═══════════════════════════════════════════════════════════════════════════════
