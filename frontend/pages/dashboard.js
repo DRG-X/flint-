@@ -5,14 +5,14 @@ import Head from "next/head";
 import Link from "next/link";
 import CompareWidget from "../components/CompareWidget";
 import AlertModal from "../components/AlertModal";
-import { getMe, listComparisons, listAlerts } from "../lib/api";
+import { getMe, listComparisons, listAlerts, syncUser } from "../lib/api";
 import { isAdmin } from "../lib/admin";
 
 const NAV_ITEMS = [
   { key: "dashboard", href: "/dashboard", icon: "⊞", label: "Dashboard" },
   { key: "transfers", href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
-  { key: "history", href: "/history", icon: "📋", label: "History" },
-  { key: "alerts", href: "/alerts", icon: "🔔", label: "Alerts" },
+  { key: "history", href: "/history", icon: "", label: "History" },
+  { key: "alerts", href: "/alerts", icon: "", label: "Alerts" },
 ];
 
 function getGreeting() {
@@ -41,6 +41,18 @@ export default function Dashboard() {
     if (!isSignedIn) { router.replace("/auth"); return; }
 
     const load = async () => {
+      // Ensure user row exists — safe to call on every login (idempotent)
+      try {
+        const syncToken = await getToken();
+        await syncUser(syncToken, {
+          clerk_id: user?.id || "",
+          email: user?.primaryEmailAddress?.emailAddress || "",
+          full_name: user?.fullName || user?.username || "",
+        });
+      } catch (_) {
+        // Non-fatal — /api/onboarding/complete will auto-create if needed
+      }
+
       setLoading(true);
       try {
         const token = await getToken();
@@ -50,9 +62,9 @@ export default function Dashboard() {
           listAlerts(token),
         ]);
 
-        const me    = meResult.status    === "fulfilled" ? meResult.value    : null;
+        const me = meResult.status === "fulfilled" ? meResult.value : null;
         const comps = compsResult.status === "fulfilled" ? compsResult.value : [];
-        const alts  = altsResult.status  === "fulfilled" ? altsResult.value  : [];
+        const alts = altsResult.status === "fulfilled" ? altsResult.value : [];
 
         if (!me) {
           const err = meResult.reason || {};
@@ -84,7 +96,7 @@ export default function Dashboard() {
       }
     };
     load();
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -113,55 +125,6 @@ export default function Dashboard() {
     return false;
   };
 
-  const Sidebar = () => (
-    <aside className={`db-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
-      <div className="sidebar-logo-wrap">
-        <Link href="/" className="logo sidebar-logo">
-          <span className="logo-mark">V</span>
-          <span>Vaulto</span>
-        </Link>
-        {isAdmin(user?.id) && (
-          <span className="sidebar-tier" style={{ backgroundColor: "#7c3aed" }}>Admin</span>
-        )}
-      </div>
-
-      <nav className="sidebar-nav">
-        {NAV_ITEMS.map(item => (
-          <Link
-            key={item.key}
-            href={item.href}
-            className={`sidebar-link ${isActive(item) ? "sidebar-link-active" : ""}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <span className="sidebar-icon">{item.icon}</span>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span style={{ lineHeight: 1 }}>{item.label}</span>
-              {item.key === 'analytics' && <span style={{ fontSize: "0.65rem", opacity: 0.6, marginTop: "0.2rem" }}>(Coming soon)</span>}
-            </div>
-          </Link>
-        ))}
-        {isAdmin(user?.id) && (
-          <Link href="/admin/analytics" className="sidebar-link">
-            <span className="sidebar-icon">📊</span>
-            <span>Analytics</span>
-          </Link>
-        )}
-      </nav>
-
-      <div className="sidebar-bottom">
-        <div className="sidebar-user">
-          <div className="sb-avatar">{initials}</div>
-          <div className="sb-user-info">
-            <div className="sb-name">{user?.fullName || firstName}</div>
-            <div className="sb-verified">Verified ✓</div>
-          </div>
-        </div>
-        <button className="btn-ghost-sm sidebar-logout" onClick={handleSignOut} id="dashboard-logout">
-          Logout
-        </button>
-      </div>
-    </aside>
-  );
 
   return (
     <>
@@ -171,7 +134,54 @@ export default function Dashboard() {
       </Head>
 
       <div className="db-layout">
-        <Sidebar />
+        <aside className={`db-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+          <div className="sidebar-logo-wrap">
+            <Link href="/" className="logo sidebar-logo">
+              <span className="logo-mark">V</span>
+              <span>Vaulto</span>
+            </Link>
+            {isAdmin(user?.id) && (
+              <span className="sidebar-tier" style={{ backgroundColor: "#7c3aed" }}>Admin</span>
+            )}
+          </div>
+
+          <nav className="sidebar-nav">
+            <p style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", padding: "0 1rem", marginBottom: "0.25rem" }}>Navigation</p>
+            {NAV_ITEMS.map(item => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`sidebar-link ${isActive(item) ? "sidebar-link-active" : ""}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <span className="sidebar-icon">{item.icon}</span>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ lineHeight: 1 }}>{item.label}</span>
+                  {item.key === 'analytics' && <span style={{ fontSize: "0.65rem", opacity: 0.6, marginTop: "0.2rem" }}>(Coming soon)</span>}
+                </div>
+              </Link>
+            ))}
+            {isAdmin(user?.id) && (
+              <Link href="/admin/analytics" className="sidebar-link">
+                <span className="sidebar-icon">📊</span>
+                <span>Analytics</span>
+              </Link>
+            )}
+          </nav>
+
+          <div className="sidebar-bottom">
+            <div className="sidebar-user">
+              <div className="sb-avatar">{initials}</div>
+              <div className="sb-user-info">
+                <div className="sb-name">{user?.fullName || firstName}</div>
+                <div className="sb-verified">Verified ✓</div>
+              </div>
+            </div>
+            <button className="btn-ghost-sm sidebar-logout" onClick={handleSignOut} id="dashboard-logout">
+              Logout
+            </button>
+          </div>
+        </aside>
 
         {/* Mobile overlay */}
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -256,12 +266,12 @@ export default function Dashboard() {
                   <Link href="/history" style={{ fontSize: "0.8rem", color: "var(--secondary)", textDecoration: "none", fontWeight: 600 }}>View all →</Link>
                 </div>
                 {loading ? (
-                  [1,2,3].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
+                  [1, 2, 3].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
                 ) : comparisons.length > 0 ? (
                   <div className="recent-list">
                     {comparisons.slice(0, 5).map((c, i) => {
                       let best = "—";
-                      try { const r = JSON.parse(c.results_json || "[]"); best = r[0]?.provider || "—"; } catch {}
+                      try { const r = JSON.parse(c.results_json || "[]"); best = r[0]?.provider || "—"; } catch { }
                       return (
                         <div key={i} className="recent-item">
                           <div>
@@ -293,7 +303,7 @@ export default function Dashboard() {
                   <Link href="/alerts" style={{ fontSize: "0.8rem", color: "var(--secondary)", textDecoration: "none", fontWeight: 600 }}>Manage →</Link>
                 </div>
                 {loading ? (
-                  [1,2].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
+                  [1, 2].map(i => <div key={i} className="skeleton-line" style={{ margin: "0.75rem 0" }} />)
                 ) : activeAlerts.length > 0 ? (
                   <div className="alerts-list">
                     {activeAlerts.map(a => (
@@ -374,6 +384,7 @@ export default function Dashboard() {
           overflow-y: auto;
           flex-shrink: 0;
           z-index: 50;
+          color: rgba(255,255,255,0.85);
         }
         @media (max-width: 900px) {
           .db-sidebar {
@@ -391,7 +402,7 @@ export default function Dashboard() {
         }
 
         .sidebar-logo-wrap {
-          padding: 1.5rem;
+          padding: 1.5rem 1.25rem 1.25rem;
           border-bottom: 1px solid rgba(255,255,255,0.06);
           display: flex; align-items: center; gap: 0.75rem;
         }
@@ -405,24 +416,26 @@ export default function Dashboard() {
 
         .sidebar-nav {
           flex: 1;
-          padding: 1rem 0.75rem;
-          display: flex; flex-direction: column; gap: 0.25rem;
+          padding: 1.25rem 0.75rem;
+          display: flex; flex-direction: column; gap: 0.35rem;
         }
         .sidebar-link {
           display: flex; align-items: center; gap: 0.75rem;
-          padding: 0.7rem 0.85rem;
+          padding: 0.75rem 1rem;
           border-radius: var(--radius-md);
-          font-size: 0.9rem; font-weight: 500;
-          color: rgba(255,255,255,0.65);
+          font-size: 0.0875rem; font-weight: 600;
+          letter-spacing: 0.01em;
+          color: rgba(255,255,255,0.9) !important;
           text-decoration: none;
-          transition: background 0.15s, color 0.15s;
+          transition: background 0.15s, color 0.15s, border-color 0.15s;
+          border-left: 3px solid transparent;
         }
-        .sidebar-link:hover { background: rgba(255,255,255,0.06); color: white; }
-        .sidebar-link-active { background: rgba(255,255,255,0.1) !important; color: white !important; }
-        .sidebar-icon { font-size: 1rem; width: 20px; text-align: center; }
+        .sidebar-link:hover { background: rgba(255,255,255,0.09); color: #ffffff !important; border-left-color: rgba(255,255,255,0.2); }
+        .sidebar-link-active { background: rgba(0,88,190,0.22) !important; color: white !important; border-left-color: var(--secondary) !important; font-weight: 600; }
+        .sidebar-icon { font-size: 1.1rem; width: 22px; text-align: center; color: inherit; }
 
         .sidebar-bottom {
-          padding: 1rem 0.75rem 1.5rem;
+          padding: 1.25rem 0.75rem 1.75rem;
           border-top: 1px solid rgba(255,255,255,0.06);
           display: flex; flex-direction: column; gap: 0.75rem;
         }
@@ -434,8 +447,8 @@ export default function Dashboard() {
           font-family: var(--font-display); font-weight: 800; font-size: 0.8rem; color: white;
           flex-shrink: 0;
         }
-        .sb-name { font-size: 0.875rem; font-weight: 600; color: rgba(255,255,255,0.9); }
-        .sb-verified { font-size: 0.7rem; color: var(--tertiary); }
+        .sb-name { font-size: 0.875rem; font-weight: 600; color: #ffffff; }
+        .sb-verified { font-size: 0.7rem; color: rgba(255,255,255,0.6); }
         .sidebar-logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); width: 100%; justify-content: center; }
         .sidebar-logout:hover { color: white; border-color: rgba(255,255,255,0.3); }
 

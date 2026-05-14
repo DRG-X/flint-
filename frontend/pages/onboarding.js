@@ -294,19 +294,19 @@ export default function Onboarding() {
                 </div>
               </div>
 
-              <div className="mb-1 field">
-                <label className="mb-1">
+              <div className="mb-1">
+                <p style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600, marginBottom: "6px" }}>
                   WhatsApp Number
                   <span className="inline-flex ml-2 pill pill-muted !px-1.5 !py-0.5 !text-[9px] align-middle">
                     Optional
                   </span>
-                </label>
-                <div className="flex gap-2">
+                </p>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                   <select
                     id="onboard-phone-code"
                     value={phoneCode}
                     onChange={(e) => setPhoneCode(e.target.value)}
-                    className="w-[100px] shrink-0"
+                    style={{ width: "110px", flexShrink: 0 }}
                   >
                     {PHONE_CODES.map((pc) => (
                       <option key={`${pc.flag}-${pc.code}-${pc.country}`} value={pc.code}>
@@ -320,7 +320,7 @@ export default function Onboarding() {
                     placeholder="Your phone number"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s()-]/g, ""))}
-                    className="flex-1"
+                    style={{ flex: 1 }}
                   />
                 </div>
               </div>

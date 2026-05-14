@@ -14,11 +14,8 @@ export default function PostAuth() {
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    if (!isSignedIn) {
-      router.push("/auth");
-      return;
-    }
+    if (!isSignedIn) { router.push("/auth"); return; }
+    if (!user || !user.id) return;   // wait for user object to hydrate
 
     const routeUser = async () => {
       let isTimedOut = false;
@@ -28,25 +25,34 @@ export default function PostAuth() {
       }, 10000);
 
       try {
-        // 1. Ensure user row exists in DB (safe to call repeatedly — idempotent)
-        const token = await getToken();
+        // Retry getToken up to 3 times with 500ms delay — new OAuth sessions
+        // need an extra tick before the token is available
+        let token = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          token = await getToken();
+          if (token) break;
+          await new Promise(r => setTimeout(r, 500));
+        }
+
+        if (!token) {
+          clearTimeout(timeoutId);
+          setErrorMsg("Could not authenticate. Please try signing in again.");
+          return;
+        }
+
         await syncUser(token, {
-          clerk_id:  user?.id || "",
-          email:     user?.primaryEmailAddress?.emailAddress || "",
-          full_name: user?.fullName || user?.username || "",
+          clerk_id:  user.id,
+          email:     user.primaryEmailAddress?.emailAddress || "",
+          full_name: user.fullName || user.username || "",
         });
 
-        // 2. Check if onboarding is complete
         const { exists, is_onboarded } = await checkStatus();
         clearTimeout(timeoutId);
-
         if (isTimedOut) return;
 
         if (exists && is_onboarded) {
-          // Returning user with a profile → go to dashboard
           router.push("/dashboard");
         } else {
-          // New user — start onboarding
           router.push("/onboarding");
         }
       } catch (err) {
@@ -58,7 +64,7 @@ export default function PostAuth() {
     };
 
     routeUser();
-  }, [isLoaded, isSignedIn, user, checkStatus, router]);
+  }, [isLoaded, isSignedIn, user]);
 
   return (
     <>
