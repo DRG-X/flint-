@@ -8,11 +8,12 @@ import AlertModal from "../components/AlertModal";
 import { getMe, listComparisons, listAlerts, syncUser } from "../lib/api";
 import { isAdmin } from "../lib/admin";
 
+// ── FIX 1: Added missing icons for History ("📋") and Alerts ("🔔") ──────────
 const NAV_ITEMS = [
   { key: "dashboard", href: "/dashboard", icon: "⊞", label: "Dashboard" },
   { key: "transfers", href: "/results?from=GBP&to=INR&amount=1000", icon: "⇄", label: "Transfers" },
-  { key: "history", href: "/history", icon: "", label: "History" },
-  { key: "alerts", href: "/alerts", icon: "", label: "Alerts" },
+  { key: "history", href: "/history", icon: "📋", label: "History" },
+  { key: "alerts", href: "/alerts", icon: "🔔", label: "Alerts" },
 ];
 
 function getGreeting() {
@@ -41,7 +42,6 @@ export default function Dashboard() {
     if (!isSignedIn) { router.replace("/auth"); return; }
 
     const load = async () => {
-      // Ensure user row exists — safe to call on every login (idempotent)
       try {
         const syncToken = await getToken();
         await syncUser(syncToken, {
@@ -49,9 +49,7 @@ export default function Dashboard() {
           email: user?.primaryEmailAddress?.emailAddress || "",
           full_name: user?.fullName || user?.username || "",
         });
-      } catch (_) {
-        // Non-fatal — /api/onboarding/complete will auto-create if needed
-      }
+      } catch (_) { }
 
       setLoading(true);
       try {
@@ -68,13 +66,9 @@ export default function Dashboard() {
 
         if (!me) {
           const err = meResult.reason || {};
-          if (err.status === 404) {
-            router.replace('/onboarding');
-          } else if (err.status === 401) {
-            router.replace('/auth');
-          } else {
-            setError("Could not load your profile. Refresh to try again.");
-          }
+          if (err.status === 404) { router.replace("/onboarding"); }
+          else if (err.status === 401) { router.replace("/auth"); }
+          else { setError("Could not load your profile. Refresh to try again."); }
           setLoading(false);
           return;
         }
@@ -118,13 +112,12 @@ export default function Dashboard() {
   if (!isLoaded || (isLoaded && !isSignedIn)) return null;
 
   const isActive = (item) => {
-    if (item.key === 'dashboard') return router.pathname === '/dashboard';
-    if (item.key === 'transfers') return router.pathname === '/results';
-    if (item.key === 'history') return router.pathname === '/history';
-    if (item.key === 'alerts') return router.pathname === '/alerts';
+    if (item.key === "dashboard") return router.pathname === "/dashboard";
+    if (item.key === "transfers") return router.pathname === "/results";
+    if (item.key === "history") return router.pathname === "/history";
+    if (item.key === "alerts") return router.pathname === "/alerts";
     return false;
   };
-
 
   return (
     <>
@@ -134,7 +127,10 @@ export default function Dashboard() {
       </Head>
 
       <div className="db-layout">
+        {/* ── Sidebar ── */}
         <aside className={`db-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+
+          {/* Logo */}
           <div className="sidebar-logo-wrap">
             <Link href="/" className="logo sidebar-logo">
               <span className="logo-mark">V</span>
@@ -145,8 +141,10 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* Nav links */}
           <nav className="sidebar-nav">
-            <p style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", padding: "0 1rem", marginBottom: "0.25rem" }}>Navigation</p>
+            <p className="sidebar-nav-label">Navigation</p>
+
             {NAV_ITEMS.map(item => (
               <Link
                 key={item.key}
@@ -155,20 +153,19 @@ export default function Dashboard() {
                 onClick={() => setSidebarOpen(false)}
               >
                 <span className="sidebar-icon">{item.icon}</span>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ lineHeight: 1 }}>{item.label}</span>
-                  {item.key === 'analytics' && <span style={{ fontSize: "0.65rem", opacity: 0.6, marginTop: "0.2rem" }}>(Coming soon)</span>}
-                </div>
+                <span className="sidebar-label">{item.label}</span>
               </Link>
             ))}
+
             {isAdmin(user?.id) && (
               <Link href="/admin/analytics" className="sidebar-link">
                 <span className="sidebar-icon">📊</span>
-                <span>Analytics</span>
+                <span className="sidebar-label">Analytics</span>
               </Link>
             )}
           </nav>
 
+          {/* User + Logout */}
           <div className="sidebar-bottom">
             <div className="sidebar-user">
               <div className="sb-avatar">{initials}</div>
@@ -186,6 +183,7 @@ export default function Dashboard() {
         {/* Mobile overlay */}
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
+        {/* ── Main content ── */}
         <main className="db-main">
           {/* Mobile header */}
           <div className="db-mobile-header">
@@ -209,7 +207,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Header */}
+            {/* Greeting */}
             <div className="db-header">
               <p className="label-sm">Overview</p>
               <h1 className="display-md" style={{ margin: "0.25rem 0 0.5rem" }}>
@@ -366,12 +364,14 @@ export default function Dashboard() {
       />
 
       <style jsx>{`
+        /* ── Layout ── */
         .db-layout {
           display: flex;
           min-height: 100vh;
           background: var(--bg);
         }
 
+        /* ── Sidebar ── */
         .db-sidebar {
           width: 240px;
           min-height: 100vh;
@@ -384,14 +384,12 @@ export default function Dashboard() {
           overflow-y: auto;
           flex-shrink: 0;
           z-index: 50;
-          color: rgba(255,255,255,0.85);
         }
         @media (max-width: 900px) {
           .db-sidebar {
             position: fixed;
             left: -260px;
             transition: left 0.3s ease;
-            box-shadow: none;
           }
           .sidebar-open { left: 0 !important; box-shadow: var(--shadow-lg); }
         }
@@ -401,6 +399,7 @@ export default function Dashboard() {
           background: rgba(0,0,0,0.5);
         }
 
+        /* Logo row */
         .sidebar-logo-wrap {
           padding: 1.5rem 1.25rem 1.25rem;
           border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -409,31 +408,64 @@ export default function Dashboard() {
         .sidebar-logo { color: white !important; font-size: 1.2rem; }
         .sidebar-tier {
           font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
-          background: var(--secondary); color: white;
-          padding: 0.15rem 0.5rem; border-radius: var(--radius-full);
-          text-transform: uppercase;
+          color: white; padding: 0.15rem 0.5rem;
+          border-radius: var(--radius-full); text-transform: uppercase;
         }
 
+        /* Nav section */
         .sidebar-nav {
           flex: 1;
           padding: 1.25rem 0.75rem;
-          display: flex; flex-direction: column; gap: 0.35rem;
+          display: flex; flex-direction: column; gap: 0.25rem;
         }
+
+        /* ── FIX 2: "NAVIGATION" section label ── */
+        .sidebar-nav-label {
+          font-size: 0.6rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.3);
+          padding: 0 0.25rem;
+          margin-bottom: 0.5rem;
+        }
+
+        /* ── FIX 1: font-size was 0.0875rem (1.4px = invisible). Fixed to 0.875rem ── */
         .sidebar-link {
-          display: flex; align-items: center; gap: 0.75rem;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
           padding: 0.75rem 1rem;
           border-radius: var(--radius-md);
-          font-size: 0.0875rem; font-weight: 600;
+          font-size: 0.875rem;          /* ← WAS 0.0875rem — THE ROOT CAUSE */
+          font-weight: 600;
           letter-spacing: 0.01em;
-          color: rgba(255,255,255,0.9) !important;
+          color: rgba(255,255,255,0.75) !important;
           text-decoration: none;
           transition: background 0.15s, color 0.15s, border-color 0.15s;
           border-left: 3px solid transparent;
         }
-        .sidebar-link:hover { background: rgba(255,255,255,0.09); color: #ffffff !important; border-left-color: rgba(255,255,255,0.2); }
-        .sidebar-link-active { background: rgba(0,88,190,0.22) !important; color: white !important; border-left-color: var(--secondary) !important; font-weight: 600; }
-        .sidebar-icon { font-size: 1.1rem; width: 22px; text-align: center; color: inherit; }
+        .sidebar-link:hover {
+          background: rgba(255,255,255,0.09);
+          color: #ffffff !important;
+          border-left-color: rgba(255,255,255,0.2);
+        }
+        .sidebar-link-active {
+          background: rgba(0,88,190,0.22) !important;
+          color: white !important;
+          border-left-color: var(--secondary) !important;
+          font-weight: 700;
+        }
 
+        .sidebar-icon {
+          font-size: 1rem;
+          width: 20px;
+          text-align: center;
+          flex-shrink: 0;
+        }
+        .sidebar-label { line-height: 1; }
+
+        /* User + logout */
         .sidebar-bottom {
           padding: 1.25rem 0.75rem 1.75rem;
           border-top: 1px solid rgba(255,255,255,0.06);
@@ -444,15 +476,22 @@ export default function Dashboard() {
           width: 36px; height: 36px; border-radius: 50%;
           background: linear-gradient(135deg, var(--secondary), var(--tertiary));
           display: flex; align-items: center; justify-content: center;
-          font-family: var(--font-display); font-weight: 800; font-size: 0.8rem; color: white;
-          flex-shrink: 0;
+          font-family: var(--font-display); font-weight: 800;
+          font-size: 0.8rem; color: white; flex-shrink: 0;
         }
-        .sb-name { font-size: 0.875rem; font-weight: 600; color: #ffffff; }
+        .sb-name     { font-size: 0.875rem; font-weight: 600; color: #ffffff; }
         .sb-verified { font-size: 0.7rem; color: rgba(255,255,255,0.6); }
-        .sidebar-logout { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); width: 100%; justify-content: center; }
+
+        .sidebar-logout {
+          color: rgba(255,255,255,0.5);
+          border-color: rgba(255,255,255,0.1);
+          width: 100%; justify-content: center;
+        }
         .sidebar-logout:hover { color: white; border-color: rgba(255,255,255,0.3); }
 
+        /* ── Main ── */
         .db-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
         .db-mobile-header {
           display: none;
           align-items: center; gap: 1rem;
@@ -462,21 +501,22 @@ export default function Dashboard() {
           position: sticky; top: 0; z-index: 30;
         }
         @media (max-width: 900px) { .db-mobile-header { display: flex; } }
+
         .hamburger { display: flex; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
-        .ham-line { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; }
+        .ham-line   { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; }
 
         .db-content { padding: 2rem 2.5rem; max-width: 1000px; }
         @media (max-width: 900px) { .db-content { padding: 1.5rem; } }
 
         .db-header { margin-bottom: 2rem; }
 
+        /* Smart insight card */
         .smart-card {
           background: linear-gradient(135deg, var(--primary) 0%, #1e3460 100%);
           border-radius: var(--radius-xl);
           padding: 2rem;
           display: flex; align-items: flex-start; justify-content: space-between;
-          gap: 1.5rem;
-          margin-bottom: 1.5rem;
+          gap: 1.5rem; margin-bottom: 1.5rem;
           position: relative; overflow: hidden;
         }
         .smart-card::before {
@@ -488,59 +528,50 @@ export default function Dashboard() {
         }
         @media (max-width: 600px) { .smart-card { flex-direction: column; } }
 
+        /* Two-column grid */
         .db-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 1.25rem;
-          margin-bottom: 1.5rem;
+          gap: 1.25rem; margin-bottom: 1.5rem;
         }
         @media (max-width: 700px) { .db-grid { grid-template-columns: 1fr; } }
 
         .card-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-        .recent-list { display: flex; flex-direction: column; gap: 0; }
-        .recent-item {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 0.75rem 0;
-          border-bottom: 1px solid var(--surface-high);
-        }
+
+        .recent-list  { display: flex; flex-direction: column; }
+        .recent-item  { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--surface-high); }
         .recent-item:last-child { border-bottom: none; }
         .recent-corridor { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; color: var(--text); }
-        .recent-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
-        .recent-rerun { font-size: 0.8rem; color: var(--secondary); text-decoration: none; font-weight: 600; }
+        .recent-meta     { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+        .recent-rerun    { font-size: 0.8rem; color: var(--secondary); text-decoration: none; font-weight: 600; }
         .recent-rerun:hover { text-decoration: underline; }
 
-        .alerts-list { display: flex; flex-direction: column; gap: 0; }
-        .alert-item {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 0.75rem 0;
-          border-bottom: 1px solid var(--surface-high);
-        }
+        .alerts-list { display: flex; flex-direction: column; }
+        .alert-item  { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--surface-high); }
         .alert-item:last-child { border-bottom: none; }
         .alert-corridor { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
-        .alert-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+        .alert-meta     { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
 
         .empty-state-sm { text-align: center; padding: 1.5rem 0; color: var(--muted); font-size: 0.875rem; }
         .empty-state-sm p { margin-bottom: 0.25rem; }
 
+        /* Stats row */
         .db-stats {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 1rem;
         }
         @media (max-width: 600px) { .db-stats { grid-template-columns: 1fr; } }
+
         .stat-mini {
           background: var(--surface-float);
           border-radius: var(--radius-md);
-          padding: 1.25rem;
-          box-shadow: var(--shadow-sm);
-          text-align: center;
+          padding: 1.25rem; box-shadow: var(--shadow-sm); text-align: center;
         }
         .stat-mini-value {
           font-family: var(--font-display);
           font-size: 1.8rem; font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--text);
-          margin-bottom: 0.25rem;
+          letter-spacing: -0.03em; color: var(--text); margin-bottom: 0.25rem;
         }
       `}</style>
     </>
