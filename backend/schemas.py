@@ -186,3 +186,12 @@ class ContactMessage(BaseModel):
     email: str
     subject: str
     message: str
+
+
+# ── Click tracking ────────────────────────────────────────────────────────────
+
+class ClickCreate(BaseModel):
+    provider: str
+    from_currency: str
+    to_currency: str
+    amount: float

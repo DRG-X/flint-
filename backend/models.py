@@ -48,3 +48,15 @@ class RateAlert(Base):
     is_active       = Column(Boolean, default=True)
     last_triggered  = Column(DateTime, nullable=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
+
+
+class ProviderClick(Base):
+    __tablename__ = "provider_clicks"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String, nullable=True)          # null = anonymous visitor
+    provider      = Column(String, nullable=False, index=True)
+    from_currency = Column(String, nullable=False)
+    to_currency   = Column(String, nullable=False)
+    amount        = Column(Float, nullable=False)
+    created_at    = Column(DateTime, default=datetime.utcnow)

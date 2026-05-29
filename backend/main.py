@@ -11,9 +11,11 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 # Make sure backend root is on the path so relative imports work cleanly
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException, Depends, Query, Request
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from schemas import (
@@ -24,6 +26,7 @@ from schemas import (
     ComparisonCreate, ComparisonRead,
     RateAlertCreate, RateAlertRead, RateAlertUpdate,
     ContactMessage,
+    ClickCreate,
 )
 from engine.comparator import compare
 
@@ -31,6 +34,7 @@ import models
 from database import Base, engine, get_db
 from auth import verify_clerk_token, verify_admin_token
 from cache import get_cached_rates, set_cached_rates, init_cache, close_cache
+from scheduler import start_scheduler, stop_scheduler
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -47,10 +51,12 @@ logger = logging.getLogger("flint")
 async def lifespan(app: FastAPI):
     """Initialise shared resources on startup; clean up on shutdown."""
     await init_cache()   # connect Redis + PING test
-    from models import User, Comparison, RateAlert  # noqa — ensures models registered
+    from models import User, Comparison, RateAlert, ProviderClick  # noqa — ensures models registered
     Base.metadata.create_all(bind=engine)           # safety net: create tables if not present
     logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
+    start_scheduler()    # background alert checker — every 15 min
     yield
+    stop_scheduler()     # graceful shutdown
     await close_cache()  # graceful shutdown
 
 
@@ -525,6 +531,53 @@ def delete_alert(
         raise HTTPException(status_code=500, detail="Failed to delete alert")
 
 app.include_router(alerts_router)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# /api/clicks  — affiliate click tracking (anonymous-safe)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_click_bearer = HTTPBearer(auto_error=False)   # don't reject unauthenticated requests
+
+clicks_router = APIRouter(prefix="/api/clicks", tags=["clicks"])
+
+
+@clicks_router.post("", status_code=201)
+async def track_click(
+    body: ClickCreate,
+    db: Session = Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(_click_bearer),
+):
+    """
+    Fire-and-forget click event from the results page.
+    Authenticated users get their clerk_user_id attached; anonymous clicks are
+    stored with clerk_user_id=None — both are valid for revenue analytics.
+    """
+    clerk_user_id = None
+    if credentials:
+        try:
+            payload = verify_clerk_token(credentials)
+            clerk_user_id = payload.get("clerk_user_id")
+        except Exception:
+            pass  # anonymous click — perfectly fine
+
+    click = models.ProviderClick(
+        clerk_user_id=clerk_user_id,
+        provider=body.provider,
+        from_currency=body.from_currency.upper(),
+        to_currency=body.to_currency.upper(),
+        amount=body.amount,
+    )
+    db.add(click)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.error("track_click: DB commit failed for provider=%s", body.provider)
+    return {"tracked": True}
+
+
+app.include_router(clicks_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
