@@ -50,7 +50,7 @@ export default function Footer() {
             <ul className="footer-links">
               <li><Link href="/contact">Help Center</Link></li>
               <li><Link href="/contact">WhatsApp Support</Link></li>
-              <li><a href="mailto:support@vaulto.app">support@vaulto.app</a></li>
+              <li><a href="mailto:support@vaulto.com">support@vaulto.com</a></li>
             </ul>
           </div>
         </div>

@@ -52,6 +52,7 @@ async def check_alerts():
                         )
                         await send_alert_notification(alert, best_rate, best_provider, db)
                         alert.last_triggered = datetime.datetime.utcnow()
+                        alert.is_active = False  # auto-pause after first trigger to prevent spam
                         db.commit()
 
             except Exception as exc:
@@ -78,6 +79,8 @@ async def send_alert_notification(
         f"Current best rate: 1 {alert.from_currency} = {current_rate:.4f} {alert.to_currency}\n"
         f"Best provider right now: {provider}\n\n"
         f"Send money now at vaulto.in"
+        f"\n\nThis alert has been automatically paused.\n"
+        f"Visit https://vaulto.in/alerts to re-enable it or set a new target."
     )
 
     if alert.notify_email and user.email:
@@ -97,7 +100,7 @@ async def send_email_notification(email: str, message: str, alert: RateAlert) ->
         resend.Emails.send({
             "from": "alerts@vaulto.in",
             "to": email,
-            "subject": f"🎯 Your rate alert hit! {alert.from_currency}→{alert.to_currency}",
+            "subject": f"Rate alert triggered — {alert.from_currency}→{alert.to_currency} (now paused)",
             "text": message,
         })
         logger.info("Email notification sent to %s for alert %s", email, alert.id)

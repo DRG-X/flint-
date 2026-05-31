@@ -48,16 +48,22 @@ export default function ProviderCard({ provider, rank, isBest, sortBy, onAlert, 
     }
   };
 
-  const handleProviderClick = (providerName) => {
-    if (typeof window !== "undefined" && window.console) {
-      console.log("[vaulto] provider_click", {
-        provider: providerName,
-        corridor: `${provider.currency_from}-${provider.currency_to}`,
-        amount: provider.send_amount,
-        timestamp: new Date().toISOString(),
-      });
+  const handleProviderClick = async (providerName) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const body = JSON.stringify({
+      provider: providerName,
+      from_currency: provider.currency_from,
+      to_currency: provider.currency_to,
+      amount: provider.send_amount,
+    });
+    const headers = { 'Content-Type': 'application/json' };
+    if (isSignedIn) {
+      try {
+        const token = await getToken();
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+      } catch (_) {}
     }
-    // TODO: POST to /api/clicks when endpoint is ready
+    fetch(apiUrl + '/api/clicks', { method: 'POST', headers, body }).catch(() => {});
   };
 
   return (
